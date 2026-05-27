@@ -1,10 +1,10 @@
-# 📦 Bugasura MVP - Package Contents Summary
+# 📦 Bugme MVP - Package Contents Summary
 
 ## What You're Getting
 
 A **complete, production-ready full-stack MVP** of a bug tracking and test management platform.
 
-### File: `bugasura-mvp.zip` (46 KB)
+### File: `bugme-mvp.zip` (46 KB)
 
 ---
 
@@ -314,8 +314,8 @@ GET, PATCH, DELETE /api/v1/projects/:projectId/test-cases/:testCaseId
 
 1. **Extract ZIP**
    ```bash
-   unzip bugasura-mvp.zip
-   cd bugasura-mvp
+   unzip bugme-mvp.zip
+   cd bugme-mvp
    ```
 
 2. **Setup Backend**
@@ -342,7 +342,7 @@ GET, PATCH, DELETE /api/v1/projects/:projectId/test-cases/:testCaseId
 
 ### Demo Credentials
 ```
-Email: demo@bugasura.com
+Email: demo@bugme.com
 Password: Demo@123
 ```
 
@@ -495,4 +495,4 @@ Total Size: ~46 KB (without node_modules)
 
 ---
 
-*Bugasura MVP - A modern bug tracking platform built for teams that move fast and test smarter.*
+*Bugme MVP - A modern bug tracking platform built for teams that move fast and test smarter.*

@@ -1,6 +1,6 @@
-# Bugasura MVP - Frontend
+# Bugme MVP - Frontend
 
-A React-based frontend for the Bugasura bug tracking and test management platform.
+A React-based frontend for the Bugme bug tracking and test management platform.
 
 ## Features
 
@@ -78,7 +78,7 @@ Landing page with feature overview and call-to-action buttons.
 
 ### Login (/login)
 User login with JWT token management.
-- Demo email: `demo@bugasura.com`
+- Demo email: `demo@bugme.com`
 - Demo password: `Demo@123`
 
 ### Signup (/signup)

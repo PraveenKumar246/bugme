@@ -1,4 +1,3 @@
-import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -15,7 +14,7 @@ function ProtectedRoute({ children }) {
           height: '100vh',
         }}
       >
-        <div className="loading"></div>
+        <div className="spinner" />
       </div>
     );
   }

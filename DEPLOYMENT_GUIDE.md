@@ -1,8 +1,8 @@
-# Bugasura MVP - Deployment Guide
+# Bugme MVP - Deployment Guide
 
 ## Overview
 
-This guide covers deploying Bugasura MVP to production environments. Currently covers Heroku, which is the simplest option for beginners.
+This guide covers deploying Bugme MVP to production environments. Currently covers Heroku, which is the simplest option for beginners.
 
 ---
 
@@ -23,11 +23,11 @@ This guide covers deploying Bugasura MVP to production environments. Currently c
 # Initialize git repository (if not already done)
 git init
 git add .
-git commit -m "Initial Bugasura MVP commit"
+git commit -m "Initial Bugme MVP commit"
 
 # Create GitHub repository (recommended)
 # Then add remote:
-git remote add origin https://github.com/yourusername/bugasura-mvp.git
+git remote add origin https://github.com/yourusername/bugme-mvp.git
 git push -u origin main
 ```
 
@@ -38,34 +38,34 @@ git push -u origin main
 heroku login
 
 # Create apps for backend and frontend
-heroku create bugasura-api
-heroku create bugasura-frontend
+heroku create bugme-api
+heroku create bugme-frontend
 ```
 
 ### Step 3: Setup Database
 
 ```bash
 # Add PostgreSQL to backend app
-heroku addons:create heroku-postgresql:hobby-dev -a bugasura-api
+heroku addons:create heroku-postgresql:hobby-dev -a bugme-api
 
 # Get database URL
-heroku config -a bugasura-api
+heroku config -a bugme-api
 ```
 
 ### Step 4: Configure Environment Variables
 
 ```bash
 # Set environment variables for backend
-heroku config:set -a bugasura-api \
-  DB_HOST=$(heroku config:get DATABASE_URL -a bugasura-api | sed 's/.*@//;s/:.*//' | sed 's/^[^@]*@//') \
+heroku config:set -a bugme-api \
+  DB_HOST=$(heroku config:get DATABASE_URL -a bugme-api | sed 's/.*@//;s/:.*//' | sed 's/^[^@]*@//') \
   DB_PORT=5432 \
   JWT_SECRET=your_production_secret_key_change_this \
   NODE_ENV=production \
-  CORS_ORIGIN=https://bugasura-frontend.herokuapp.com
+  CORS_ORIGIN=https://bugme-frontend.herokuapp.com
 
 # For frontend
-heroku config:set -a bugasura-frontend \
-  REACT_APP_API_URL=https://bugasura-api.herokuapp.com/api/v1
+heroku config:set -a bugme-frontend \
+  REACT_APP_API_URL=https://bugme-api.herokuapp.com/api/v1
 ```
 
 ### Step 5: Create Procfile (Backend)
@@ -117,7 +117,7 @@ cd backend
 git subtree push --prefix backend heroku-backend main
 
 # Or create a separate git repo
-heroku git:remote -a bugasura-api
+heroku git:remote -a bugme-api
 git push heroku main
 ```
 
@@ -137,7 +137,7 @@ npm run build
 echo "web: npm run preview" > Procfile
 
 # Deploy
-heroku git:remote -a bugasura-frontend
+heroku git:remote -a bugme-frontend
 git push heroku main
 ```
 
@@ -145,18 +145,18 @@ git push heroku main
 
 ```bash
 # Run seeding on backend
-heroku run npm run seed -a bugasura-api
+heroku run npm run seed -a bugme-api
 ```
 
 ### Step 10: Verify Deployment
 
 ```bash
 # Check backend
-curl https://bugasura-api.herokuapp.com/api/v1/health
+curl https://bugme-api.herokuapp.com/api/v1/health
 
 # Check logs
-heroku logs -a bugasura-api --tail
-heroku logs -a bugasura-frontend --tail
+heroku logs -a bugme-api --tail
+heroku logs -a bugme-frontend --tail
 ```
 
 ---
@@ -170,7 +170,7 @@ heroku logs -a bugasura-frontend --tail
 pip install awsebcli --upgrade --user
 
 # Initialize
-eb init -p node.js-18 bugasura
+eb init -p node.js-18 bugme
 
 # Create environment
 eb create production
@@ -214,7 +214,7 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_DB: bugasura_db
+      POSTGRES_DB: bugme_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
@@ -231,7 +231,7 @@ services:
       DB_PORT: 5432
       DB_USER: postgres
       DB_PASSWORD: postgres
-      DB_NAME: bugasura_db
+      DB_NAME: bugme_db
       JWT_SECRET: your_secret_key
     depends_on:
       - postgres
@@ -269,11 +269,11 @@ docker-compose up -d
 ```bash
 # Create app.yaml
 cat > app.yaml << EOF
-name: bugasura
+name: bugme
 services:
   - name: backend
     github:
-      repo: your_username/bugasura-mvp
+      repo: your_username/bugme-mvp
       branch: main
     build_command: npm install
     run_command: npm start
@@ -286,14 +286,14 @@ services:
   
   - name: frontend
     github:
-      repo: your_username/bugasura-mvp
+      repo: your_username/bugme-mvp
       branch: main
     build_command: cd frontend && npm install && npm run build
     run_command: npm start
     http_port: 3000
 
 databases:
-  - name: bugasura-db
+  - name: bugme-db
     engine: PG
     version: "15"
 EOF
@@ -315,7 +315,7 @@ DB_HOST=prod-db.example.com
 DB_PORT=5432
 DB_USER=prod_user
 DB_PASSWORD=***strong_password***
-DB_NAME=bugasura_prod
+DB_NAME=bugme_prod
 JWT_SECRET=***very_long_random_secret***
 CORS_ORIGIN=https://yourdomain.com
 ```
@@ -426,7 +426,7 @@ logger.info('Application started');
 # Daily backup script
 #!/bin/bash
 BACKUP_DIR="/backups/postgresql"
-DATABASE="bugasura_db"
+DATABASE="bugme_db"
 USER="postgres"
 
 pg_dump -U $USER $DATABASE | gzip > $BACKUP_DIR/backup_$(date +%Y%m%d_%H%M%S).sql.gz
@@ -506,10 +506,10 @@ Before going live:
 
 ```bash
 # Heroku rollback
-heroku releases:rollback -a bugasura-api
+heroku releases:rollback -a bugme-api
 
 # Docker rollback
-docker rollout undo deployment/bugasura-api
+docker rollout undo deployment/bugme-api
 
 # Check status
 git log --oneline
@@ -553,7 +553,7 @@ npm install package@latest
 ### Backend won't start
 ```bash
 # Check logs
-heroku logs -a bugasura-api --tail
+heroku logs -a bugme-api --tail
 
 # Check database connection
 psql postgresql://user:password@host/dbname

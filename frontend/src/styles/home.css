@@ -1,140 +1,96 @@
-.home-container {
-  min-height: 100vh;
-}
+.home-container { min-height: 100vh; }
 
+/* ── Hero ── */
 .hero {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--accent) 0%, #7c3aed 100%);
   color: white;
   padding: 100px 20px;
   text-align: center;
 }
 
-.hero-content h1 {
-  font-size: 56px;
-  margin-bottom: 20px;
-}
+.hero-content h1 { font-size: 56px; margin-bottom: 20px; }
 
 .hero-content h2 {
-  font-size: 32px;
-  margin-bottom: 20px;
-  font-weight: 600;
+  font-size: 32px; margin-bottom: 20px; font-weight: 600;
 }
 
 .hero-content p {
-  font-size: 18px;
-  max-width: 600px;
-  margin: 0 auto 40px;
-  opacity: 0.9;
-  line-height: 1.6;
+  font-size: 18px; max-width: 600px;
+  margin: 0 auto 40px; opacity: 0.9; line-height: 1.6;
 }
 
 .hero-buttons {
-  display: flex;
-  gap: 15px;
-  justify-content: center;
-  flex-wrap: wrap;
+  display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;
+}
+.hero-buttons .btn { padding: 14px 36px; font-size: 16px; }
+.hero-buttons .btn-secondary {
+  background: rgba(255,255,255,0.15);
+  border-color: rgba(255,255,255,0.4);
+  color: #fff;
+}
+.hero-buttons .btn-secondary:hover {
+  background: rgba(255,255,255,0.25);
 }
 
-.hero-buttons .btn {
-  padding: 14px 36px;
-  font-size: 16px;
-}
-
+/* ── Features ── */
 .features {
   padding: 80px 20px;
-  background: white;
+  background: var(--bg-card);
 }
+
+.features .container { max-width: 1100px; margin: 0 auto; }
 
 .features .container h3 {
   text-align: center;
-  font-size: 32px;
-  color: var(--dark);
-  margin-bottom: 50px;
+  font-size: 30px; font-weight: 800;
+  color: var(--text); margin-bottom: 50px; letter-spacing: -0.4px;
 }
 
 .features-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 30px;
+  gap: 24px;
 }
 
 .feature-card {
-  text-align: center;
-  padding: 30px 20px;
-  border-radius: 12px;
-  background: #f8f9fa;
-  transition: all 0.3s ease;
+  text-align: center; padding: 28px 20px;
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  transition: all 0.25s ease;
 }
-
 .feature-card:hover {
-  background: #f0f2f5;
-  transform: translateY(-8px);
+  background: var(--bg-hover); transform: translateY(-6px);
+  box-shadow: var(--shadow-md);
 }
 
-.feature-icon {
-  font-size: 48px;
-  display: block;
-  margin-bottom: 15px;
-}
+.feature-icon { font-size: 44px; display: block; margin-bottom: 14px; }
 
 .feature-card h4 {
-  font-size: 18px;
-  color: var(--dark);
-  margin-bottom: 10px;
+  font-size: 17px; font-weight: 700;
+  color: var(--text); margin-bottom: 10px;
 }
 
-.feature-card p {
-  color: #7f8c8d;
-  font-size: 14px;
-  line-height: 1.6;
-}
+.feature-card p { color: var(--text-muted); font-size: 13.5px; line-height: 1.6; }
 
+/* ── CTA ── */
 .cta {
-  background: linear-gradient(135deg, var(--primary-color) 0%, #764ba2 100%);
-  color: white;
-  padding: 80px 20px;
-  text-align: center;
+  background: linear-gradient(135deg, var(--accent) 0%, #7c3aed 100%);
+  color: white; padding: 80px 20px; text-align: center;
 }
 
-.cta .container h3 {
-  font-size: 36px;
-  margin-bottom: 15px;
-  color: white;
-}
+.cta .container { max-width: 700px; margin: 0 auto; }
 
-.cta .container p {
-  font-size: 18px;
-  margin-bottom: 30px;
-  opacity: 0.9;
-}
+.cta .container h3 { font-size: 34px; margin-bottom: 14px; color: white; font-weight: 800; }
+.cta .container p  { font-size: 17px; margin-bottom: 30px; opacity: 0.88; }
+.cta .btn          { padding: 14px 36px; font-size: 16px; }
 
-.cta .btn {
-  padding: 14px 36px;
-  font-size: 16px;
-}
-
+/* ── Responsive ── */
 @media (max-width: 768px) {
-  .hero-content h1 {
-    font-size: 36px;
-  }
-
-  .hero-content h2 {
-    font-size: 22px;
-  }
-
-  .hero-content p {
-    font-size: 16px;
-  }
-
-  .features .container h3 {
-    font-size: 24px;
-  }
-
-  .cta .container h3 {
-    font-size: 24px;
-  }
-
-  .features-grid {
-    grid-template-columns: 1fr;
-  }
+  .hero-content h1 { font-size: 36px; }
+  .hero-content h2 { font-size: 22px; }
+  .hero-content p  { font-size: 16px; }
+  .features .container h3 { font-size: 24px; }
+  .cta .container h3      { font-size: 26px; }
+  .features-grid { grid-template-columns: 1fr; }
 }

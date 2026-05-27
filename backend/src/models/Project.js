@@ -16,23 +16,27 @@ class Project {
     `;
     try {
       await pool.query(query);
+      await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS team_id UUID`);
+      await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS platform VARCHAR(50) DEFAULT 'desktop_web'`);
       console.log('Projects table created successfully');
     } catch (error) {
       console.error('Error creating projects table:', error);
     }
   }
 
-  static async create(name, description, ownerId) {
+  static async create(name, description, ownerId, teamId, platform) {
     const id = uuidv4();
-    
     const query = `
-      INSERT INTO projects (id, name, description, owner_id)
-      VALUES ($1, $2, $3, $4)
-      RETURNING id, name, description, owner_id, created_at;
+      INSERT INTO projects (id, name, description, owner_id, team_id, platform)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING id, name, description, owner_id, team_id, platform, created_at;
     `;
-    
     try {
-      const result = await pool.query(query, [id, name, description, ownerId]);
+      const result = await pool.query(query, [
+        id, name, description, ownerId,
+        teamId || null,
+        platform || 'desktop_web',
+      ]);
       return result.rows[0];
     } catch (error) {
       throw new Error(`Error creating project: ${error.message}`);
@@ -55,11 +59,20 @@ class Project {
 
   static async findByOwnerId(ownerId) {
     const query = `
-      SELECT id, name, description, owner_id, created_at, updated_at
-      FROM projects WHERE owner_id = $1
-      ORDER BY created_at DESC;
+      SELECT p.id, p.name, p.description, p.owner_id, p.team_id, p.platform,
+             p.created_at, p.updated_at,
+             t.name as team_name,
+             COUNT(i.id) FILTER (WHERE i.status != 'closed') AS open_issues,
+             COUNT(i.id) FILTER (WHERE i.status = 'closed') AS closed_issues,
+             COUNT(i.id) AS total_issues
+      FROM projects p
+      LEFT JOIN issues i ON p.id = i.project_id
+      LEFT JOIN teams t ON p.team_id = t.id
+      WHERE p.owner_id = $1
+      GROUP BY p.id, t.name
+      ORDER BY p.created_at DESC;
     `;
-    
+
     try {
       const result = await pool.query(query, [ownerId]);
       return result.rows;

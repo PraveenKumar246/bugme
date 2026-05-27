@@ -1,0 +1,251 @@
+import { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { authService } from '../services/api';
+import '../styles/profile.css';
+
+const AVATARS = ['🧑‍💻','👩‍💻','🧑‍🎨','👨‍🎨','🧑‍🔬','👩‍🔬','🧑‍🚀','👨‍🚀','🦸','🦹'];
+
+const IconUser = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+    <circle cx="12" cy="7" r="4"/>
+  </svg>
+);
+
+const IconSub = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 12V22H4V12"/>
+    <path d="M22 7H2v5h20V7z"/>
+    <path d="M12 22V7"/>
+    <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/>
+    <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
+  </svg>
+);
+
+function getInitials(name) {
+  if (!name) return '?';
+  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+}
+
+function UserProfile() {
+  const { user, login } = useAuth();
+  const [activeNav, setActiveNav]         = useState('profile');
+  const [firstName, setFirstName]         = useState('');
+  const [lastName, setLastName]           = useState('');
+  const [selectedAvatar, setSelectedAvatar] = useState(null);
+  const [newPassword, setNewPassword]     = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [saving, setSaving]   = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError]     = useState('');
+  const [stats] = useState({ projects: 0, issues: 0, teams: 0 });
+
+  useEffect(() => {
+    if (user?.name) {
+      const parts = user.name.split(' ');
+      setFirstName(parts[0] || '');
+      setLastName(parts.slice(1).join(' ') || '');
+    }
+    if (user?.avatar_url) setSelectedAvatar(user.avatar_url);
+  }, [user]);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+    if (newPassword && newPassword !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    setSaving(true);
+    try {
+      const fullName = `${firstName} ${lastName}`.trim();
+      const res = await authService.updateProfile({ name: fullName, avatar_url: selectedAvatar });
+      const updatedUser = { ...user, ...res.data.user };
+      login(updatedUser, localStorage.getItem('token'));
+      setMessage('Profile updated successfully!');
+    } catch {
+      setError('Failed to update profile. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="profile-page">
+      {/* Secondary nav */}
+      <div className="profile-subnav">
+        <div className="subnav-label">Account</div>
+        <button
+          className={`subnav-item${activeNav === 'profile' ? ' active' : ''}`}
+          onClick={() => setActiveNav('profile')}
+        >
+          <IconUser /> User Profile
+        </button>
+        <button
+          className={`subnav-item${activeNav === 'subscription' ? ' active' : ''}`}
+          onClick={() => setActiveNav('subscription')}
+        >
+          <IconSub /> Subscription
+        </button>
+      </div>
+
+      <div className="profile-main">
+        {activeNav === 'profile' && (
+          <>
+            <h1 className="profile-page-title">My Profile</h1>
+
+            {error   && <div className="alert alert-error">{error}</div>}
+            {message && <div className="alert alert-success">{message}</div>}
+
+            <form onSubmit={handleSave}>
+              <div className="profile-grid">
+                {/* Left column */}
+                <div className="profile-left-col">
+                  {/* Avatar card */}
+                  <div className="profile-avatar-card">
+                    <div className="profile-avatar-wrap">
+                      <div className="profile-avatar-circle">
+                        {selectedAvatar && AVATARS.includes(selectedAvatar)
+                          ? <span style={{ fontSize: 34 }}>{selectedAvatar}</span>
+                          : getInitials(user?.name)
+                        }
+                      </div>
+                      <div className="profile-avatar-edit">📷</div>
+                    </div>
+                    <div className="profile-name">{user?.name}</div>
+                    <div className="profile-plan-badge">Free Plan</div>
+                    <div className="profile-stats">
+                      <div className="profile-stat">
+                        <div className="profile-stat-val">{stats.projects}</div>
+                        <div className="profile-stat-label">Projects</div>
+                      </div>
+                      <div className="profile-stat">
+                        <div className="profile-stat-val">{stats.issues}</div>
+                        <div className="profile-stat-label">Issues</div>
+                      </div>
+                      <div className="profile-stat">
+                        <div className="profile-stat-val">{stats.teams}</div>
+                        <div className="profile-stat-label">Teams</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Avatar picker */}
+                  <div className="avatar-picker-card">
+                    <div className="avatar-picker-title">Choose Avatar</div>
+                    <div className="avatar-picker-sub">Pick an avatar for your profile.</div>
+                    <div className="avatar-grid">
+                      {AVATARS.map(av => (
+                        <button
+                          key={av}
+                          type="button"
+                          className={`avatar-option${selectedAvatar === av ? ' selected' : ''}`}
+                          onClick={() => setSelectedAvatar(av)}
+                          title={av}
+                        >
+                          {av}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right column */}
+                <div className="profile-details-card">
+                  <div className="profile-section-title">General Details</div>
+
+                  <div className="profile-form-row">
+                    <div className="input-group">
+                      <label>First Name *</label>
+                      <input
+                        type="text" value={firstName}
+                        onChange={e => setFirstName(e.target.value)}
+                        placeholder="First name" required
+                      />
+                    </div>
+                    <div className="input-group">
+                      <label>Last Name</label>
+                      <input
+                        type="text" value={lastName}
+                        onChange={e => setLastName(e.target.value)}
+                        placeholder="Last name"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="input-group">
+                    <label>Email Address</label>
+                    <div className="input-locked">
+                      <input
+                        type="email" value={user?.email || ''}
+                        disabled style={{ paddingRight: 36 }}
+                      />
+                      <span className="lock-icon">🔒</span>
+                    </div>
+                  </div>
+
+                  <div className="input-group">
+                    <label>New Password</label>
+                    <input
+                      type="password" value={newPassword}
+                      onChange={e => setNewPassword(e.target.value)}
+                      placeholder="Leave blank to keep current"
+                    />
+                  </div>
+
+                  <div className="input-group">
+                    <label>Confirm Password</label>
+                    <input
+                      type="password" value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)}
+                      placeholder="Confirm new password"
+                    />
+                  </div>
+
+                  <div className="input-group">
+                    <label>Preferred Language</label>
+                    <select>
+                      <option>English</option>
+                      <option>Hindi</option>
+                      <option>Spanish</option>
+                    </select>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="btn btn-primary profile-save-btn"
+                    disabled={saving}
+                  >
+                    {saving ? <><span className="spinner spinner-white" /> Saving…</> : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </>
+        )}
+
+        {activeNav === 'subscription' && (
+          <div>
+            <h1 className="profile-page-title">Subscription</h1>
+            <div className="card" style={{ maxWidth: 480 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                <span style={{ fontSize: 28 }}>🎁</span>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text)' }}>Free Plan</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Unlimited projects &amp; issues</div>
+                </div>
+              </div>
+              <p style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.7 }}>
+                You're on the Free plan. Upgrade to Pro to unlock advanced analytics, priority support, and more integrations.
+              </p>
+              <button className="btn btn-primary" style={{ marginTop: 20 }}>Upgrade to Pro</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default UserProfile;

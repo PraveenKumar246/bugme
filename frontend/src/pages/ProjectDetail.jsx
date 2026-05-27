@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { projectService, issueService, testCaseService } from '../services/api';
 import '../styles/project-detail.css';
@@ -116,17 +116,17 @@ function ProjectDetail() {
 
   if (loading) {
     return (
-      <div className="container" style={{ textAlign: 'center', padding: '40px' }}>
-        <div className="loading"></div>
+      <div className="page-wrapper" style={{ textAlign: 'center', padding: '60px' }}>
+        <div className="spinner spinner-lg" />
       </div>
     );
   }
 
   if (!project) {
     return (
-      <div className="container">
+      <div className="page-wrapper">
         <div className="alert alert-error">Project not found</div>
-        <button className="btn btn-primary" onClick={() => navigate('/projects')}>
+        <button className="btn btn-primary" onClick={() => navigate('/apps')}>
           Back to Projects
         </button>
       </div>
@@ -134,13 +134,13 @@ function ProjectDetail() {
   }
 
   return (
-    <div className="container mt-20">
+    <div className="page-wrapper">
       <div className="project-detail-header">
         <div>
           <h1>{project.name}</h1>
           <p className="project-desc">{project.description}</p>
         </div>
-        <button className="btn btn-secondary" onClick={() => navigate('/projects')}>
+        <button className="btn btn-secondary" onClick={() => navigate('/apps')}>
           ← Back
         </button>
       </div>

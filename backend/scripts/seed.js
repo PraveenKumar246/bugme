@@ -8,7 +8,7 @@ async function seedDatabase() {
     console.log('🌱 Seeding database...');
 
     // Create demo user
-    const user = await User.create('demo@bugasura.com', 'Demo@123', 'Demo User');
+    const user = await User.create('demo@bugme.com', 'Demo@123', 'Demo User');
     console.log('✅ Demo user created:', user.id);
 
     // Create demo project
@@ -45,7 +45,7 @@ async function seedDatabase() {
       'Test user login functionality',
       [
         { step: 1, description: 'Navigate to login page' },
-        { step: 2, description: 'Enter email: demo@bugasura.com' },
+        { step: 2, description: 'Enter email: demo@bugme.com' },
         { step: 3, description: 'Enter password: Demo@123' },
         { step: 4, description: 'Click login button' },
       ],
@@ -70,7 +70,7 @@ async function seedDatabase() {
 
     console.log('\n✨ Database seeding completed successfully!');
     console.log('\nDemo Credentials:');
-    console.log('Email: demo@bugasura.com');
+    console.log('Email: demo@bugme.com');
     console.log('Password: Demo@123');
 
   } catch (error) {

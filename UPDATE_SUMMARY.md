@@ -1,4 +1,4 @@
-# 🎉 Bugasura MVP v2 - EXTENDED EDITION
+# 🎉 Bugme MVP v2 - EXTENDED EDITION
 
 ## ✨ What's New in This Update
 
@@ -305,7 +305,7 @@ If you already have v1 running:
 
 1. **Backup your database**
    ```bash
-   pg_dump bugasura_db > backup.sql
+   pg_dump bugme_db > backup.sql
    ```
 
 2. **Pull new code**
@@ -358,7 +358,7 @@ If you already have v1 running:
 
 ### Heroku (Recommended for MVP)
 ```bash
-heroku create bugasura-api
+heroku create bugme-api
 heroku addons:create heroku-postgresql:hobby-dev
 git push heroku main
 ```
@@ -500,8 +500,8 @@ See DEPLOYMENT_GUIDE.md for detailed instructions
 
 1. **Extract ZIP**
    ```bash
-   unzip bugasura-mvp.zip
-   cd bugasura-mvp
+   unzip bugme-mvp.zip
+   cd bugme-mvp
    ```
 
 2. **Start Backend**

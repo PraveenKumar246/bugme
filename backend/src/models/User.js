@@ -73,6 +73,23 @@ class User {
   static async validatePassword(plainPassword, hashedPassword) {
     return await bcrypt.compare(plainPassword, hashedPassword);
   }
+
+  static async updateProfile(id, { name, avatar_url }) {
+    const query = `
+      UPDATE users
+      SET name = COALESCE($1, name),
+          avatar_url = COALESCE($2, avatar_url),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $3
+      RETURNING id, email, name, avatar_url, created_at, updated_at;
+    `;
+    try {
+      const result = await pool.query(query, [name || null, avatar_url || null, id]);
+      return result.rows[0];
+    } catch (error) {
+      throw new Error(`Error updating profile: ${error.message}`);
+    }
+  }
 }
 
 export default User;

@@ -18,7 +18,7 @@ function Navbar() {
         <div className="navbar-brand">
           <Link to="/">
             <span className="logo-icon">🐛</span>
-            <span className="logo-text">Bugasura</span>
+            <span className="logo-text">Bugme</span>
           </Link>
         </div>
 

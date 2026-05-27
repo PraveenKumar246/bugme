@@ -7,13 +7,13 @@ const router = express.Router();
 // Create project
 router.post('/', verifyToken, async (req, res) => {
   try {
-    const { name, description } = req.body;
+    const { name, description, team_id, platform } = req.body;
 
     if (!name) {
       return res.status(400).json({ error: 'Project name is required' });
     }
 
-    const project = await Project.create(name, description, req.user.id);
+    const project = await Project.create(name, description, req.user.id, team_id, platform);
 
     res.status(201).json({
       message: 'Project created successfully',

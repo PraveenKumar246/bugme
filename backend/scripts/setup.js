@@ -12,7 +12,7 @@ DB_HOST=localhost
 DB_PORT=5432
 DB_USER=postgres
 DB_PASSWORD=postgres
-DB_NAME=bugasura_db
+DB_NAME=bugme_db
 
 # Server Configuration
 SERVER_PORT=5000
@@ -31,10 +31,10 @@ CORS_ORIGIN=http://localhost:3000,http://localhost:3001
 
 const SETUP_GUIDE = `
 ╔════════════════════════════════════════════════════════════╗
-║          Bugasura MVP - Setup Configuration Utility        ║
+║          Bugme MVP - Setup Configuration Utility        ║
 ╚════════════════════════════════════════════════════════════╝
 
-Thank you for choosing Bugasura! Let's get your project set up.
+Thank you for choosing Bugme! Let's get your project set up.
 
 ## ⚙️ Configuration Steps
 
@@ -43,7 +43,7 @@ Thank you for choosing Bugasura! Let's get your project set up.
 2. Install dependencies: npm install
 3. This script will create .env file
 4. Update .env with your PostgreSQL credentials
-5. Create database: createdb bugasura_db
+5. Create database: createdb bugme_db
 6. Start server: npm run dev
 
 ### Frontend Setup
@@ -57,7 +57,7 @@ Thank you for choosing Bugasura! Let's get your project set up.
 - API Docs: http://localhost:5000/api/v1/health
 
 ### Demo Credentials (after seeding)
-- Email: demo@bugasura.com
+- Email: demo@bugme.com
 - Password: Demo@123
 
 ### Seed Database (Optional)
@@ -78,7 +78,7 @@ cd backend && npm run seed
 
 ## ✅ Setup Complete!
 
-You're ready to start building with Bugasura!
+You're ready to start building with Bugme!
 
 Happy Coding! 🚀
 `;
@@ -119,7 +119,7 @@ function printEnvironmentVariables() {
 }
 
 function main() {
-  console.log('\n🚀 Bugasura MVP Setup Utility\n');
+  console.log('\n🚀 Bugme MVP Setup Utility\n');
 
   setupBackendEnv();
   printEnvironmentVariables();

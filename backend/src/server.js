@@ -9,6 +9,7 @@ import Project from './models/Project.js';
 import Issue from './models/Issue.js';
 import TestCase from './models/TestCase.js';
 import Comment from './models/Comment.js';
+import Team from './models/Team.js';
 
 import authRoutes from './routes/auth.js';
 import projectRoutes from './routes/projects.js';
@@ -16,6 +17,8 @@ import issueRoutes from './routes/issues.js';
 import testCaseRoutes from './routes/testCases.js';
 import commentRoutes from './routes/comments.js';
 import analyticsRoutes from './routes/analytics.js';
+import teamRoutes from './routes/teams.js';
+import invitationRoutes from './routes/invitations.js';
 
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
@@ -46,6 +49,7 @@ async function initializeDatabase() {
     await Issue.createTable();
     await TestCase.createTable();
     await Comment.createTable();
+    await Team.createTable();
     console.log('Database tables initialized successfully');
   } catch (error) {
     console.error('Error initializing database:', error);
@@ -59,6 +63,8 @@ app.use('/api/v1/projects/:projectId/issues', issueRoutes);
 app.use('/api/v1/projects/:projectId/issues/:issueId/comments', commentRoutes);
 app.use('/api/v1/projects/:projectId/test-cases', testCaseRoutes);
 app.use('/api/v1/projects/:projectId/analytics', analyticsRoutes);
+app.use('/api/v1/teams', teamRoutes);
+app.use('/api/v1/invitations', invitationRoutes);
 
 // Health check
 app.get('/api/v1/health', (req, res) => {
@@ -96,7 +102,7 @@ async function startServer() {
     httpServer.listen(PORT, () => {
       console.log(`🚀 Server is running on http://localhost:${PORT}`);
       console.log(`📊 API Version: v1`);
-      console.log(`🗄️  Database: ${process.env.DB_NAME || 'bugasura_db'}`);
+      console.log(`🗄️  Database: ${process.env.DB_NAME || 'bugme_db'}`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);

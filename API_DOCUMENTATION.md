@@ -1,4 +1,4 @@
-# Bugasura MVP - API Documentation
+# Bugme MVP - API Documentation
 
 ## Base URL
 

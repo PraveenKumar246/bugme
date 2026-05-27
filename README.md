@@ -1,4 +1,4 @@
-# Bugasura MVP - Complete Full-Stack Application
+# Bugme MVP - Complete Full-Stack Application
 
 A complete MVP of a bug tracking and test management platform built with React (Frontend) and Node.js (Backend).
 
@@ -27,7 +27,7 @@ A complete MVP of a bug tracking and test management platform built with React (
 ## 📁 Project Structure
 
 ```
-bugasura-mvp/
+bugme-mvp/
 ├── backend/                 # Node.js Express Server
 │   ├── src/
 │   │   ├── config/         # Database configuration
@@ -110,14 +110,14 @@ npm run seed
 ```
 
 **Demo Credentials:**
-- Email: `demo@bugasura.com`
+- Email: `demo@bugme.com`
 - Password: `Demo@123`
 
 ## 🔑 Demo Account
 
 After seeding, you can login with:
 ```
-Email: demo@bugasura.com
+Email: demo@bugme.com
 Password: Demo@123
 ```
 

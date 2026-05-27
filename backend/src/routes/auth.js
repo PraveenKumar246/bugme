@@ -1,6 +1,6 @@
 import express from 'express';
 import User from '../models/User.js';
-import { generateToken } from '../middleware/auth.js';
+import { generateToken, verifyToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -68,6 +68,30 @@ router.post('/login', async (req, res) => {
     });
   } catch (error) {
     console.error('Login error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get current user profile
+router.get('/profile', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(user);
+  } catch (error) {
+    console.error('Get profile error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update profile
+router.patch('/profile', verifyToken, async (req, res) => {
+  try {
+    const { name, avatar_url } = req.body;
+    const user = await User.updateProfile(req.user.id, { name, avatar_url });
+    res.json({ message: 'Profile updated successfully', user });
+  } catch (error) {
+    console.error('Update profile error:', error);
     res.status(500).json({ error: error.message });
   }
 });

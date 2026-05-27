@@ -10,7 +10,7 @@ const pool = new Pool({
   port: process.env.DB_PORT || 5432,
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || 'postgres',
-  database: process.env.DB_NAME || 'bugasura_db',
+  database: process.env.DB_NAME || 'bugme_db',
 });
 
 pool.on('error', (err) => {

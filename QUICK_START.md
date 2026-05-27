@@ -1,4 +1,4 @@
-# Bugasura MVP - Quick Start Guide
+# Bugme MVP - Quick Start Guide
 
 ## 📦 What's Included
 
@@ -16,8 +16,8 @@ This ZIP contains a complete, production-ready MVP with:
 
 ### Step 1: Extract the ZIP
 ```bash
-unzip bugasura-mvp.zip
-cd bugasura-mvp
+unzip bugme-mvp.zip
+cd bugme-mvp
 ```
 
 ### Step 2: Install & Setup Backend
@@ -36,10 +36,10 @@ cp .env.example .env
 # DB_PORT=5432
 # DB_USER=postgres
 # DB_PASSWORD=your_password
-# DB_NAME=bugasura_db
+# DB_NAME=bugme_db
 
 # Create PostgreSQL database (if you haven't already)
-createdb bugasura_db
+createdb bugme_db
 
 # Start backend server (in terminal 1)
 npm run dev
@@ -55,7 +55,7 @@ npm run seed
 ```
 
 **Demo Credentials:**
-- Email: `demo@bugasura.com`
+- Email: `demo@bugme.com`
 - Password: `Demo@123`
 
 ### Step 4: Install & Setup Frontend
@@ -89,7 +89,7 @@ Open your browser and visit: `http://localhost:3000`
 ## 📚 File Structure Overview
 
 ```
-bugasura-mvp/
+bugme-mvp/
 ├── backend/
 │   ├── src/
 │   │   ├── models/       → Database models (User, Project, Issue, TestCase)
@@ -118,7 +118,7 @@ DB_HOST=localhost
 DB_PORT=5432
 DB_USER=postgres
 DB_PASSWORD=your_password
-DB_NAME=bugasura_db
+DB_NAME=bugme_db
 SERVER_PORT=5000
 JWT_SECRET=your_secret_key_change_in_production
 ```
@@ -196,8 +196,8 @@ npm install
 ### Database Connection Error
 - Verify PostgreSQL is running
 - Check credentials in .env
-- Ensure database `bugasura_db` exists
-- Try: `psql -U postgres -d bugasura_db`
+- Ensure database `bugme_db` exists
+- Try: `psql -U postgres -d bugme_db`
 
 ## 📖 Documentation
 

@@ -1,78 +1,72 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:5000/api/v1';
+const API_BASE_URL = 'http://localhost:5001/api/v1';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' },
 });
 
-// Add token to requests
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// Auth services
 export const authService = {
   signup: (email, password, name) =>
     api.post('/auth/signup', { email, password, name }),
   login: (email, password) =>
     api.post('/auth/login', { email, password }),
+  getProfile: () =>
+    api.get('/auth/profile'),
+  updateProfile: (data) =>
+    api.patch('/auth/profile', data),
 };
 
-// Project services
 export const projectService = {
-  getAll: () => api.get('/projects'),
-  getById: (id) => api.get(`/projects/${id}`),
-  create: (name, description) =>
-    api.post('/projects', { name, description }),
-  update: (id, name, description) =>
-    api.patch(`/projects/${id}`, { name, description }),
-  delete: (id) => api.delete(`/projects/${id}`),
+  getAll:  ()                              => api.get('/projects'),
+  getById: (id)                            => api.get(`/projects/${id}`),
+  create:  (name, desc, teamId, platform)  => api.post('/projects', { name, description: desc, team_id: teamId, platform }),
+  update:  (id, name, desc)               => api.patch(`/projects/${id}`, { name, description: desc }),
+  delete:  (id)                            => api.delete(`/projects/${id}`),
 };
 
-// Issue services
 export const issueService = {
-  getAll: (projectId, filters = {}) => {
+  getAll:  (projectId, filters = {}) => {
     const params = new URLSearchParams(filters);
     return api.get(`/projects/${projectId}/issues?${params}`);
   },
-  getById: (projectId, issueId) =>
-    api.get(`/projects/${projectId}/issues/${issueId}`),
-  create: (projectId, title, description, priority) =>
-    api.post(`/projects/${projectId}/issues`, {
-      title,
-      description,
-      priority,
-    }),
-  update: (projectId, issueId, updates) =>
+  getById: (projectId, issueId)      => api.get(`/projects/${projectId}/issues/${issueId}`),
+  create:  (projectId, title, desc, priority) =>
+    api.post(`/projects/${projectId}/issues`, { title, description: desc, priority }),
+  update:  (projectId, issueId, updates) =>
     api.patch(`/projects/${projectId}/issues/${issueId}`, updates),
-  delete: (projectId, issueId) =>
-    api.delete(`/projects/${projectId}/issues/${issueId}`),
+  delete:  (projectId, issueId)      => api.delete(`/projects/${projectId}/issues/${issueId}`),
 };
 
-// Test case services
 export const testCaseService = {
-  getAll: (projectId) => api.get(`/projects/${projectId}/test-cases`),
-  getById: (projectId, testCaseId) =>
-    api.get(`/projects/${projectId}/test-cases/${testCaseId}`),
-  create: (projectId, title, description, steps, expectedResult) =>
-    api.post(`/projects/${projectId}/test-cases`, {
-      title,
-      description,
-      steps,
-      expected_result: expectedResult,
-    }),
-  update: (projectId, testCaseId, updates) =>
-    api.patch(`/projects/${projectId}/test-cases/${testCaseId}`, updates),
-  delete: (projectId, testCaseId) =>
-    api.delete(`/projects/${projectId}/test-cases/${testCaseId}`),
+  getAll:  (projectId)           => api.get(`/projects/${projectId}/test-cases`),
+  getById: (projectId, tcId)     => api.get(`/projects/${projectId}/test-cases/${tcId}`),
+  create:  (projectId, title, desc, steps, expectedResult) =>
+    api.post(`/projects/${projectId}/test-cases`, { title, description: desc, steps, expected_result: expectedResult }),
+  update:  (projectId, tcId, updates) =>
+    api.patch(`/projects/${projectId}/test-cases/${tcId}`, updates),
+  delete:  (projectId, tcId)     => api.delete(`/projects/${projectId}/test-cases/${tcId}`),
+};
+
+export const teamService = {
+  getAll:        ()                   => api.get('/teams'),
+  create:        (name, desc)         => api.post('/teams', { name, description: desc }),
+  delete:        (id)                 => api.delete(`/teams/${id}`),
+  invite:        (teamId, email)      => api.post(`/teams/${teamId}/members`, { email }),
+  removeMember:  (teamId, userId)     => api.delete(`/teams/${teamId}/members/${userId}`),
+};
+
+// Public — no auth token needed
+export const invitationService = {
+  get:    (token)            => api.get(`/invitations/${token}`),
+  accept: (token, name, pw)  => api.post(`/invitations/${token}/accept`, { name, password: pw }),
 };
 
 export default api;

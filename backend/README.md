@@ -1,4 +1,4 @@
-# Bugasura MVP - Backend
+# Bugme MVP - Backend
 
 A Node.js Express backend for bug tracking and test management platform.
 
@@ -36,12 +36,12 @@ A Node.js Express backend for bug tracking and test management platform.
    DB_PORT=5432
    DB_USER=postgres
    DB_PASSWORD=your_password
-   DB_NAME=bugasura_db
+   DB_NAME=bugme_db
    ```
 
 3. **Create PostgreSQL database**
    ```bash
-   createdb bugasura_db
+   createdb bugme_db
    ```
 
 ## Running the Server
@@ -66,7 +66,7 @@ npm run seed
 ```
 
 This creates:
-- Demo user (email: demo@bugasura.com, password: Demo@123)
+- Demo user (email: demo@bugme.com, password: Demo@123)
 - Sample project
 - Sample issues
 - Sample test cases
@@ -220,7 +220,7 @@ The API returns standard HTTP status codes:
 
 1. **Check database connection**
    ```bash
-   psql -U postgres -d bugasura_db
+   psql -U postgres -d bugme_db
    ```
 
 2. **View database tables**
@@ -230,8 +230,8 @@ The API returns standard HTTP status codes:
 
 3. **Clear database**
    ```bash
-   dropdb bugasura_db
-   createdb bugasura_db
+   dropdb bugme_db
+   createdb bugme_db
    ```
 
 ## Next Steps

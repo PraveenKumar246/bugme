@@ -1,4 +1,3 @@
-import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/home.css';
@@ -8,7 +7,7 @@ function Home() {
   const navigate = useNavigate();
 
   if (user) {
-    navigate('/projects');
+    navigate('/apps');
     return null;
   }
 
@@ -16,23 +15,17 @@ function Home() {
     <div className="home-container">
       <section className="hero">
         <div className="hero-content">
-          <h1>🐛 Bugasura</h1>
+          <h1>🐛 Bugme</h1>
           <h2>Bug Tracking & Test Management Made Simple</h2>
           <p>
             A modern, collaborative platform for tracking bugs and managing test cases.
             Built for teams that move fast and test smarter.
           </p>
           <div className="hero-buttons">
-            <button
-              className="btn btn-primary"
-              onClick={() => navigate('/signup')}
-            >
+            <button className="btn btn-primary" onClick={() => navigate('/signup')}>
               Get Started Free
             </button>
-            <button
-              className="btn btn-secondary"
-              onClick={() => navigate('/login')}
-            >
+            <button className="btn btn-secondary" onClick={() => navigate('/login')}>
               Sign In
             </button>
           </div>
@@ -41,7 +34,7 @@ function Home() {
 
       <section className="features">
         <div className="container">
-          <h3>Why Choose Bugasura?</h3>
+          <h3>Why Choose Bugme?</h3>
           <div className="features-grid">
             <div className="feature-card">
               <span className="feature-icon">🚀</span>
@@ -81,10 +74,7 @@ function Home() {
         <div className="container">
           <h3>Ready to streamline your QA process?</h3>
           <p>Start tracking bugs and managing tests better today</p>
-          <button
-            className="btn btn-primary"
-            onClick={() => navigate('/signup')}
-          >
+          <button className="btn btn-primary" onClick={() => navigate('/signup')}>
             Create Free Account
           </button>
         </div>
