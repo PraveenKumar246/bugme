@@ -1,20 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { teamService } from '../services/api';
+import { getInitials, avatarHue } from '../utils/helpers';
 import '../styles/teams.css';
 
-const AVATAR_COLORS = ['#1565c0','#7b1fa2','#c62828','#2e7d32','#e65100','#00838f'];
-
-function getColor(str) {
-  let h = 0;
-  for (let i = 0; i < (str || '').length; i++) h = str.charCodeAt(i) + ((h << 5) - h);
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
-}
-
-function getInitials(name) {
-  if (!name) return '?';
-  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-}
+const getColor = (name) => `hsl(${avatarHue(name)},60%,50%)`;
 
 const IconSearch = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

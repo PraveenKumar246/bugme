@@ -33,11 +33,15 @@ function UserProfile() {
   const [firstName, setFirstName]         = useState('');
   const [lastName, setLastName]           = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState(null);
-  const [newPassword, setNewPassword]     = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword]         = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [saving, setSaving]   = useState(false);
-  const [message, setMessage] = useState('');
-  const [error, setError]     = useState('');
+  const [saving, setSaving]       = useState(false);
+  const [savingPw, setSavingPw]   = useState(false);
+  const [message, setMessage]     = useState('');
+  const [pwMessage, setPwMessage] = useState('');
+  const [error, setError]         = useState('');
+  const [pwError, setPwError]     = useState('');
   const [stats] = useState({ projects: 0, issues: 0, teams: 0 });
 
   useEffect(() => {
@@ -53,10 +57,6 @@ function UserProfile() {
     e.preventDefault();
     setError('');
     setMessage('');
-    if (newPassword && newPassword !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
     setSaving(true);
     try {
       const fullName = `${firstName} ${lastName}`.trim();
@@ -68,6 +68,32 @@ function UserProfile() {
       setError('Failed to update profile. Please try again.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPwError('');
+    setPwMessage('');
+    if (newPassword.length < 6) {
+      setPwError('New password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPwError('Passwords do not match.');
+      return;
+    }
+    setSavingPw(true);
+    try {
+      await authService.changePassword(currentPassword, newPassword);
+      setPwMessage('Password changed successfully!');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err) {
+      setPwError(err.response?.data?.error || 'Failed to change password.');
+    } finally {
+      setSavingPw(false);
     }
   };
 
@@ -186,24 +212,6 @@ function UserProfile() {
                   </div>
 
                   <div className="input-group">
-                    <label>New Password</label>
-                    <input
-                      type="password" value={newPassword}
-                      onChange={e => setNewPassword(e.target.value)}
-                      placeholder="Leave blank to keep current"
-                    />
-                  </div>
-
-                  <div className="input-group">
-                    <label>Confirm Password</label>
-                    <input
-                      type="password" value={confirmPassword}
-                      onChange={e => setConfirmPassword(e.target.value)}
-                      placeholder="Confirm new password"
-                    />
-                  </div>
-
-                  <div className="input-group">
                     <label>Preferred Language</label>
                     <select>
                       <option>English</option>
@@ -222,6 +230,59 @@ function UserProfile() {
                 </div>
               </div>
             </form>
+
+            {/* ── Change Password ── */}
+            <div style={{ marginTop: 32 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>
+                Change Password
+              </h2>
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
+                Update your password. You'll need your current password to confirm.
+              </p>
+
+              {pwError   && <div className="alert alert-error"   style={{ marginBottom: 16 }}>{pwError}</div>}
+              {pwMessage && <div className="alert alert-success" style={{ marginBottom: 16 }}>{pwMessage}</div>}
+
+              <form onSubmit={handleChangePassword}>
+                <div className="profile-details-card" style={{ maxWidth: 560 }}>
+                  <div className="input-group">
+                    <label>Current Password</label>
+                    <input
+                      type="password"
+                      value={currentPassword}
+                      onChange={e => setCurrentPassword(e.target.value)}
+                      placeholder="Your current password"
+                      required
+                    />
+                  </div>
+                  <div className="profile-form-row">
+                    <div className="input-group">
+                      <label>New Password</label>
+                      <input
+                        type="password"
+                        value={newPassword}
+                        onChange={e => setNewPassword(e.target.value)}
+                        placeholder="Min. 6 characters"
+                        required
+                      />
+                    </div>
+                    <div className="input-group">
+                      <label>Confirm New Password</label>
+                      <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={e => setConfirmPassword(e.target.value)}
+                        placeholder="Repeat new password"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <button type="submit" className="btn btn-primary" disabled={savingPw}>
+                    {savingPw ? <><span className="spinner spinner-white" /> Updating…</> : 'Update Password'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </>
         )}
 

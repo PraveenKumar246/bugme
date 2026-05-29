@@ -9,7 +9,7 @@ const router = express.Router({ mergeParams: true });
 router.post('/', verifyToken, async (req, res) => {
   try {
     const { projectId } = req.params;
-    const { title, description, steps, expected_result } = req.body;
+    const { title, description, steps, expected_result, status, priority } = req.body;
 
     if (!title) {
       return res.status(400).json({ error: 'Test case title is required' });
@@ -21,12 +21,7 @@ router.post('/', verifyToken, async (req, res) => {
     }
 
     const testCase = await TestCase.create(
-      projectId,
-      title,
-      description,
-      steps || [],
-      expected_result,
-      req.user.id
+      projectId, title, description, steps || [], expected_result, req.user.id, { status, priority }
     );
 
     res.status(201).json({
@@ -74,7 +69,7 @@ router.get('/:testCaseId', verifyToken, async (req, res) => {
 router.patch('/:testCaseId', verifyToken, async (req, res) => {
   try {
     const { testCaseId } = req.params;
-    const { title, description, steps, expected_result } = req.body;
+    const { title, description, steps, expected_result, status, priority } = req.body;
 
     const testCase = await TestCase.findById(testCaseId);
     if (!testCase) {
@@ -82,11 +77,7 @@ router.patch('/:testCaseId', verifyToken, async (req, res) => {
     }
 
     const updatedTestCase = await TestCase.update(
-      testCaseId,
-      title,
-      description,
-      steps,
-      expected_result
+      testCaseId, title, description, steps, expected_result, { status, priority }
     );
 
     res.json({

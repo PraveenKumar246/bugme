@@ -33,6 +33,46 @@ async function sendMail({ to, subject, html }) {
   await transport.sendMail({ from, to, subject, html });
 }
 
+export function sendPasswordResetEmail({ to, name, resetUrl }) {
+  const subject = 'Reset your Bugme password';
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"></head>
+    <body style="margin:0;padding:0;background:#f3f4f6;font-family:Inter,-apple-system,sans-serif;">
+      <div style="max-width:520px;margin:40px auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e5e7eb;">
+        <div style="background:#6366f1;padding:32px 36px 28px;">
+          <div style="font-size:28px;margin-bottom:8px;">🐛</div>
+          <div style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">Bugme</div>
+        </div>
+        <div style="padding:32px 36px;">
+          <h2 style="font-size:20px;font-weight:700;color:#111827;margin:0 0 12px;letter-spacing:-0.3px;">
+            Reset your password
+          </h2>
+          <p style="font-size:14px;color:#6b7280;line-height:1.6;margin:0 0 24px;">
+            Hi ${name || 'there'},<br/><br/>
+            We received a request to reset the password for your Bugme account.
+            Click the button below to choose a new password. This link expires in <strong style="color:#111827;">1 hour</strong>.
+          </p>
+          <a href="${resetUrl}" style="display:inline-block;background:#6366f1;color:#ffffff;font-size:14px;font-weight:700;padding:12px 28px;border-radius:8px;text-decoration:none;letter-spacing:0.01em;">
+            Reset Password →
+          </a>
+          <p style="font-size:12px;color:#9ca3af;margin:24px 0 0;line-height:1.5;">
+            If you didn't request a password reset you can safely ignore this email — your password will not change.
+          </p>
+          <p style="font-size:12px;color:#d1d5db;margin:8px 0 0;word-break:break-all;">
+            ${resetUrl}
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return sendMail({ to, subject, html });
+}
+
 export function sendTeamInviteEmail({ to, inviterName, teamName, acceptUrl }) {
   const subject = `${inviterName} invited you to join ${teamName} on Bugme`;
 

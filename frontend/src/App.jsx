@@ -11,6 +11,9 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Projects from './pages/Projects';
 import ProjectDetail from './pages/ProjectDetail';
+import KnowledgeBase from './pages/KnowledgeBase';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import Teams from './pages/Teams';
 import UserProfile from './pages/UserProfile';
 import AcceptInvite from './pages/AcceptInvite';
@@ -57,6 +60,8 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
 
             {/* Protected routes with sidebar layout */}
             <Route path="/apps" element={
@@ -64,6 +69,9 @@ function App() {
             } />
             <Route path="/apps/:projectId" element={
               <ProtectedRoute><AppLayout><ProjectDetail /></AppLayout></ProtectedRoute>
+            } />
+            <Route path="/apps/:projectId/knowledge-base" element={
+              <ProtectedRoute><AppLayout><KnowledgeBase /></AppLayout></ProtectedRoute>
             } />
             <Route path="/teams" element={
               <ProtectedRoute><AppLayout><Teams /></AppLayout></ProtectedRoute>

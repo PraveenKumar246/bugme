@@ -55,7 +55,7 @@ router.get('/:id', verifyToken, async (req, res) => {
 // Update project
 router.patch('/:id', verifyToken, async (req, res) => {
   try {
-    const { name, description } = req.body;
+    const { name, description, platform } = req.body;
     const project = await Project.findById(req.params.id);
 
     if (!project) {
@@ -66,7 +66,7 @@ router.patch('/:id', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    const updatedProject = await Project.update(req.params.id, name, description);
+    const updatedProject = await Project.update(req.params.id, name, description, platform);
 
     res.json({
       message: 'Project updated successfully',
@@ -74,6 +74,17 @@ router.patch('/:id', verifyToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Update project error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Toggle favorite
+router.post('/:id/favorite', verifyToken, async (req, res) => {
+  try {
+    const isFavorite = await Project.toggleFavorite(req.user.id, req.params.id);
+    res.json({ is_favorite: isFavorite });
+  } catch (error) {
+    console.error('Toggle favorite error:', error);
     res.status(500).json({ error: error.message });
   }
 });

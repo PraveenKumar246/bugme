@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { invitationService } from '../services/api';
 import '../styles/auth.css';
-
-const API = 'http://localhost:5001/api/v1';
 
 function AcceptInvite() {
   const { token } = useParams();
@@ -18,13 +17,9 @@ function AcceptInvite() {
   const [error, setError]       = useState('');
 
   useEffect(() => {
-    fetch(`${API}/invitations/${token}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.error) setLoadErr(data.error);
-        else setInvite(data);
-      })
-      .catch(() => setLoadErr('Could not load invitation. Please check the link.'));
+    invitationService.get(token)
+      .then(r => setInvite(r.data))
+      .catch(err => setLoadErr(err?.response?.data?.error || 'Could not load invitation. Please check the link.'));
   }, [token]);
 
   const handleSubmit = async (e) => {
@@ -42,20 +37,11 @@ function AcceptInvite() {
 
     setSubmitting(true);
     try {
-      const res = await fetch(`${API}/invitations/${token}/accept`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim() || undefined, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || 'Something went wrong');
-        return;
-      }
-      login(data.user, data.token);
+      const res = await invitationService.accept(token, name.trim() || undefined, password);
+      login(res.data.user, res.data.token);
       navigate('/teams');
-    } catch {
-      setError('Network error. Please try again.');
+    } catch (err) {
+      setError(err?.response?.data?.error || 'Something went wrong. Please try again.');
     } finally {
       setSubmitting(false);
     }

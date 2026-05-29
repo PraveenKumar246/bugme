@@ -11,6 +11,8 @@ class TestCase {
         description TEXT,
         steps JSONB DEFAULT '[]',
         expected_result TEXT,
+        status VARCHAR(50) DEFAULT 'untested',
+        priority VARCHAR(50) DEFAULT 'medium',
         created_by UUID NOT NULL REFERENCES users(id),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -20,23 +22,24 @@ class TestCase {
     `;
     try {
       await pool.query(query);
+      await pool.query(`ALTER TABLE test_cases ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'untested'`);
+      await pool.query(`ALTER TABLE test_cases ADD COLUMN IF NOT EXISTS priority VARCHAR(50) DEFAULT 'medium'`);
       console.log('Test Cases table created successfully');
     } catch (error) {
       console.error('Error creating test_cases table:', error);
     }
   }
 
-  static async create(projectId, title, description, steps, expectedResult, createdBy) {
+  static async create(projectId, title, description, steps, expectedResult, createdBy, extras = {}) {
     const id = uuidv4();
-    
+    const { status = 'untested', priority = 'medium' } = extras;
     const query = `
-      INSERT INTO test_cases (id, project_id, title, description, steps, expected_result, created_by)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING id, project_id, title, description, steps, expected_result, created_by, created_at;
+      INSERT INTO test_cases (id, project_id, title, description, steps, expected_result, status, priority, created_by)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING id, project_id, title, description, steps, expected_result, status, priority, created_by, created_at;
     `;
-    
     try {
-      const result = await pool.query(query, [id, projectId, title, description, JSON.stringify(steps), expectedResult, createdBy]);
+      const result = await pool.query(query, [id, projectId, title, description, JSON.stringify(steps), expectedResult, status, priority, createdBy]);
       return result.rows[0];
     } catch (error) {
       throw new Error(`Error creating test case: ${error.message}`);
@@ -45,7 +48,7 @@ class TestCase {
 
   static async findById(id) {
     const query = `
-      SELECT id, project_id, title, description, steps, expected_result, created_by, created_at, updated_at
+      SELECT id, project_id, title, description, steps, expected_result, status, priority, created_by, created_at, updated_at
       FROM test_cases WHERE id = $1;
     `;
     
@@ -59,7 +62,7 @@ class TestCase {
 
   static async findByProjectId(projectId) {
     const query = `
-      SELECT id, project_id, title, description, steps, expected_result, created_by, created_at, updated_at
+      SELECT id, project_id, title, description, steps, expected_result, status, priority, created_by, created_at, updated_at
       FROM test_cases WHERE project_id = $1
       ORDER BY created_at DESC;
     `;
@@ -72,21 +75,23 @@ class TestCase {
     }
   }
 
-  static async update(id, title, description, steps, expectedResult) {
+  static async update(id, title, description, steps, expectedResult, extras = {}) {
+    const { status, priority } = extras;
     const query = `
       UPDATE test_cases
-      SET 
+      SET
         title = COALESCE($1, title),
         description = COALESCE($2, description),
         steps = COALESCE($3, steps),
         expected_result = COALESCE($4, expected_result),
+        status = COALESCE($5, status),
+        priority = COALESCE($6, priority),
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $5
-      RETURNING id, project_id, title, description, steps, expected_result, created_by, created_at, updated_at;
+      WHERE id = $7
+      RETURNING id, project_id, title, description, steps, expected_result, status, priority, created_by, created_at, updated_at;
     `;
-    
     try {
-      const result = await pool.query(query, [title, description, JSON.stringify(steps), expectedResult, id]);
+      const result = await pool.query(query, [title, description, steps ? JSON.stringify(steps) : null, expectedResult, status, priority, id]);
       return result.rows[0];
     } catch (error) {
       throw new Error(`Error updating test case: ${error.message}`);

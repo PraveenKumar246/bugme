@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { projectService, teamService } from '../services/api';
+import { PLATFORMS } from '../utils/constants';
 import '../styles/projects.css';
 
 const TABS = [
@@ -15,9 +16,11 @@ const IconSearch = () => (
   </svg>
 );
 
-function ProjectCard({ project, onDelete }) {
+function ProjectCard({ project, onDelete, onToggleFavorite, onEdit }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [starred, setStarred]   = useState(project.is_favorite || false);
+  const [starring, setStarring] = useState(false);
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -27,6 +30,21 @@ function ProjectCard({ project, onDelete }) {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
+
+  const handleStar = async (e) => {
+    e.stopPropagation();
+    if (starring) return;
+    setStarring(true);
+    setStarred(v => !v);
+    try {
+      const res = await onToggleFavorite(project.id);
+      setStarred(res);
+    } catch {
+      setStarred(v => !v);
+    } finally {
+      setStarring(false);
+    }
+  };
 
   const initials = project.name.slice(0, 2).toUpperCase();
   const open   = parseInt(project.open_issues)   || 0;
@@ -45,10 +63,20 @@ function ProjectCard({ project, onDelete }) {
           <div className="project-team-name">{project.team_name || 'No Team'}</div>
         </div>
         <div className="project-card-actions" ref={menuRef} onClick={e => e.stopPropagation()}>
+          <button
+            className={`project-star-btn${starred ? ' starred' : ''}`}
+            onClick={handleStar}
+            title={starred ? 'Remove from favourites' : 'Add to favourites'}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill={starred ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+          </button>
           <button className="project-menu-btn" onClick={() => setMenuOpen(v => !v)}>⋯</button>
           {menuOpen && (
             <div className="project-dropdown">
               <button onClick={() => { navigate(`/apps/${project.id}`); setMenuOpen(false); }}>Open</button>
+              <button onClick={() => { onEdit(project); setMenuOpen(false); }}>Edit</button>
               <button className="danger" onClick={() => { onDelete(project.id); setMenuOpen(false); }}>Delete</button>
             </div>
           )}
@@ -72,97 +100,6 @@ function ProjectCard({ project, onDelete }) {
     </div>
   );
 }
-
-const PLATFORMS = [
-  {
-    key: 'android',
-    label: 'Android',
-    icon: (
-      <svg viewBox="0 0 44 44" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M8 18h28v14a3 3 0 0 1-3 3H11a3 3 0 0 1-3-3V18z"/>
-        <path d="M13 18v-5a9 9 0 0 1 18 0v5"/>
-        <circle cx="17" cy="25" r="1.8" fill="currentColor" stroke="none"/>
-        <circle cx="27" cy="25" r="1.8" fill="currentColor" stroke="none"/>
-        <line x1="15" y1="8" x2="12" y2="5"/>
-        <line x1="29" y1="8" x2="32" y2="5"/>
-        <line x1="4"  y1="20" x2="4"  y2="27"/>
-        <line x1="40" y1="20" x2="40" y2="27"/>
-      </svg>
-    ),
-  },
-  {
-    key: 'android_mobile_web',
-    label: 'Android\nMobile Web',
-    icon: (
-      <svg viewBox="0 0 44 44" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="8" width="18" height="28" rx="2.5"/>
-        <line x1="7" y1="30" x2="17" y2="30"/>
-        <circle cx="12" cy="33" r="1" fill="currentColor" stroke="none"/>
-        <rect x="23" y="10" width="18" height="14" rx="2"/>
-        <line x1="27" y1="24" x2="37" y2="24"/>
-        <line x1="32" y1="24" x2="32" y2="27"/>
-        <line x1="28" y1="27" x2="36" y2="27"/>
-      </svg>
-    ),
-  },
-  {
-    key: 'ios',
-    label: 'iOS',
-    icon: (
-      <svg viewBox="0 0 44 44" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="10" y="3" width="24" height="38" rx="4"/>
-        <line x1="17" y1="8" x2="27" y2="8"/>
-        <circle cx="22" cy="37" r="1.5"/>
-        <path d="M22 15c0-2 1.5-3.5 3-3.5-.8 1.5-.8 3 0 4.5-1.5 0-3-1-3-1z" fill="currentColor" stroke="none"/>
-        <path d="M18 21c0-3 1.8-5 4-5s4 2 4 5-1.8 6-4 6-4-3-4-6z"/>
-      </svg>
-    ),
-  },
-  {
-    key: 'ios_mobile_web',
-    label: 'iOS Mobile\nWeb',
-    icon: (
-      <svg viewBox="0 0 44 44" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="8" width="18" height="28" rx="2.5"/>
-        <line x1="7" y1="30" x2="17" y2="30"/>
-        <circle cx="12" cy="33" r="1" fill="currentColor" stroke="none"/>
-        <path d="M12 13c0-1.5 1-2.5 2-2.5-.5.8-.5 1.8 0 2.5-1 0-2-.5-2-.5z" fill="currentColor" stroke="none"/>
-        <path d="M9.5 17c0-2 1.2-3.5 2.5-3.5s2.5 1.5 2.5 3.5-1.2 4-2.5 4-2.5-2-2.5-4z"/>
-        <rect x="23" y="10" width="18" height="14" rx="2"/>
-        <line x1="27" y1="24" x2="37" y2="24"/>
-        <line x1="32" y1="24" x2="32" y2="27"/>
-        <line x1="28" y1="27" x2="36" y2="27"/>
-      </svg>
-    ),
-  },
-  {
-    key: 'desktop_web',
-    label: 'Desktop Web',
-    icon: (
-      <svg viewBox="0 0 44 44" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="4" y="7" width="36" height="24" rx="2.5"/>
-        <line x1="4" y1="25" x2="40" y2="25"/>
-        <line x1="22" y1="31" x2="22" y2="37"/>
-        <line x1="15" y1="37" x2="29" y2="37"/>
-      </svg>
-    ),
-  },
-  {
-    key: 'multi_platform',
-    label: 'Multi\nPlatform',
-    icon: (
-      <svg viewBox="0 0 44 44" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="2" y="10" width="24" height="18" rx="2"/>
-        <line x1="2" y1="23" x2="26" y2="23"/>
-        <line x1="14" y1="28" x2="14" y2="32"/>
-        <line x1="9" y1="32" x2="19" y2="32"/>
-        <rect x="28" y="14" width="14" height="18" rx="2"/>
-        <line x1="31" y1="29" x2="39" y2="29"/>
-        <circle cx="35" cy="31" r="0.8" fill="currentColor" stroke="none"/>
-      </svg>
-    ),
-  },
-];
 
 function TeamDropdown({ teams, value, onChange, onNewTeam }) {
   const [open, setOpen]             = useState(false);
@@ -191,7 +128,7 @@ function TeamDropdown({ teams, value, onChange, onNewTeam }) {
   const selected = teams.find(t => t.id === value);
 
   const handleCreateTeam = async (e) => {
-    e.preventDefault();
+    if (e?.preventDefault) e.preventDefault();
     if (!newName.trim()) return;
     setCreating(true);
     setCreateErr('');
@@ -277,7 +214,7 @@ function TeamDropdown({ teams, value, onChange, onNewTeam }) {
                 <span className="td-create-title">New Team</span>
               </div>
               {createErr && <div className="td-create-err">{createErr}</div>}
-              <form onSubmit={handleCreateTeam} className="td-create-form">
+              <div className="td-create-form">
                 <input
                   ref={inputRef}
                   className="td-create-input"
@@ -285,17 +222,17 @@ function TeamDropdown({ teams, value, onChange, onNewTeam }) {
                   placeholder="Team name"
                   value={newName}
                   onChange={e => setNewName(e.target.value)}
-                  required
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCreateTeam(e); } }}
                 />
                 <div className="td-create-actions">
                   <button type="button" className="td-btn-cancel" onClick={() => { setMode('select'); setCreateErr(''); }}>
                     Cancel
                   </button>
-                  <button type="submit" className="td-btn-create" disabled={creating || !newName.trim()}>
+                  <button type="button" className="td-btn-create" disabled={creating || !newName.trim()} onClick={handleCreateTeam}>
                     {creating ? 'Creating…' : 'Create'}
                   </button>
                 </div>
-              </form>
+              </div>
             </div>
           )}
         </div>
@@ -451,6 +388,123 @@ function CreateProjectModal({ onClose, onCreate }) {
   );
 }
 
+function EditProjectModal({ project, onClose, onSave }) {
+  const [name, setProjName]   = useState(project.name);
+  const [platform, setPlatform] = useState(project.platform || '');
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) { setError('Project name is required.'); return; }
+    if (!platform) { setError('Please select a platform.'); return; }
+    setLoading(true);
+    setError('');
+    try {
+      await onSave(project.id, name.trim(), project.description || '', platform);
+      onClose();
+    } catch {
+      setError('Failed to update project. Please try again.');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay cp-overlay" onClick={onClose}>
+      <div className="cp-modal" onClick={e => e.stopPropagation()}>
+        <div className="cp-header">
+          <div className="cp-header-left">
+            <div className="cp-header-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </div>
+            <div>
+              <h3 className="cp-title">Edit Project</h3>
+              <p className="cp-subtitle">Update project details</p>
+            </div>
+          </div>
+          <button className="cp-close-btn" onClick={onClose} aria-label="Close">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        <div className="cp-body">
+          {error && (
+            <div className="cp-error-banner">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              {error}
+            </div>
+          )}
+          <form onSubmit={handleSubmit}>
+            <div className="cp-field" style={{ marginBottom: 20 }}>
+              <label className="cp-label">Project Name <span className="cp-required">*</span></label>
+              <input
+                className="cp-input"
+                type="text"
+                value={name}
+                onChange={e => setProjName(e.target.value)}
+                autoFocus
+                required
+              />
+            </div>
+
+            <div className="cp-section">
+              <div className="cp-section-label">
+                <span className="cp-label">Select Platform <span className="cp-required">*</span></span>
+                {platform && (
+                  <span className="cp-selected-badge">
+                    {PLATFORMS.find(p => p.key === platform)?.label.replace('\n', ' ')}
+                  </span>
+                )}
+              </div>
+              <div className="platform-grid">
+                {PLATFORMS.map(p => (
+                  <button
+                    key={p.key}
+                    type="button"
+                    className={`platform-card${platform === p.key ? ' selected' : ''}`}
+                    onClick={() => setPlatform(p.key)}
+                  >
+                    {platform === p.key && (
+                      <span className="platform-check">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                      </span>
+                    )}
+                    <div className="platform-icon">{p.icon}</div>
+                    <span className="platform-label">
+                      {p.label.split('\n').map((line, i, arr) => (
+                        <span key={i}>{line}{i < arr.length - 1 && <br/>}</span>
+                      ))}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="cp-footer">
+              <button type="button" className="cp-btn-cancel" onClick={onClose}>Cancel</button>
+              <button type="submit" className="cp-btn-submit" disabled={loading}>
+                {loading
+                  ? <><span className="spinner spinner-white spinner-sm"/> Saving…</>
+                  : 'Save Changes'
+                }
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Projects() {
   const [projects, setProjects]   = useState([]);
   const [loading, setLoading]     = useState(true);
@@ -458,6 +512,7 @@ function Projects() {
   const [search, setSearch]       = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [showModal, setShowModal] = useState(false);
+  const [editProject, setEditProject] = useState(null);
 
   useEffect(() => { fetchProjects(); }, []);
 
@@ -488,14 +543,32 @@ function Projects() {
     }
   };
 
+  const handleEdit = async (id, name, desc, platform) => {
+    await projectService.update(id, name, desc, platform);
+    setProjects(prev => prev.map(p => p.id === id ? { ...p, name, description: desc, platform } : p));
+  };
+
+  const handleToggleFavorite = async (id) => {
+    const res = await projectService.toggleFavorite(id);
+    setProjects(prev =>
+      prev.map(p => p.id === id ? { ...p, is_favorite: res.data.is_favorite } : p)
+    );
+    return res.data.is_favorite;
+  };
+
   const openCount   = projects.reduce((s, p) => s + (parseInt(p.open_issues)   || 0), 0);
   const closedCount = projects.reduce((s, p) => s + (parseInt(p.closed_issues) || 0), 0);
 
-  const filtered = projects.filter(p =>
+  const tabFiltered = activeTab === 'favourites'
+    ? projects.filter(p => p.is_favorite)
+    : projects;
+
+  const filtered = tabFiltered.filter(p =>
     p.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  const tabCounts = { all: projects.length, mine: projects.length, favourites: 0 };
+  const favCount = projects.filter(p => p.is_favorite).length;
+  const tabCounts = { all: projects.length, mine: projects.length, favourites: favCount };
 
   return (
     <div className="page-wrapper">
@@ -571,10 +644,22 @@ function Projects() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">📁</div>
-          <h3>{search ? 'No projects match your search' : 'No projects yet'}</h3>
-          <p>{search ? 'Try a different search term.' : 'Create your first project to get started.'}</p>
-          {!search && (
+          <div className="empty-state-icon">{activeTab === 'favourites' ? '⭐' : '📁'}</div>
+          <h3>
+            {search
+              ? 'No projects match your search'
+              : activeTab === 'favourites'
+              ? 'No favourites yet'
+              : 'No projects yet'}
+          </h3>
+          <p>
+            {search
+              ? 'Try a different search term.'
+              : activeTab === 'favourites'
+              ? 'Star a project to add it to your favourites.'
+              : 'Create your first project to get started.'}
+          </p>
+          {!search && activeTab !== 'favourites' && (
             <button className="btn btn-primary" onClick={() => setShowModal(true)}>
               + Create Project
             </button>
@@ -583,7 +668,7 @@ function Projects() {
       ) : (
         <div className="projects-grid">
           {filtered.map(p => (
-            <ProjectCard key={p.id} project={p} onDelete={handleDelete} />
+            <ProjectCard key={p.id} project={p} onDelete={handleDelete} onToggleFavorite={handleToggleFavorite} onEdit={setEditProject} />
           ))}
         </div>
       )}
@@ -592,6 +677,14 @@ function Projects() {
         <CreateProjectModal
           onClose={() => setShowModal(false)}
           onCreate={handleCreate}
+        />
+      )}
+
+      {editProject && (
+        <EditProjectModal
+          project={editProject}
+          onClose={() => setEditProject(null)}
+          onSave={handleEdit}
         />
       )}
     </div>
