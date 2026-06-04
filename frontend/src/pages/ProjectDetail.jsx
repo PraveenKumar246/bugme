@@ -1,23 +1,31 @@
-import { useState, useEffect, useRef } from 'react';
+import { memo, useState, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
-import { projectService, issueService, testCaseService, sprintService, analyticsService, teamService, customFieldService } from '../services/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  projectService, issueService, testCaseService,
+  sprintService, analyticsService, teamService, customFieldService,
+} from '../services/api';
+import { queryKeys } from '../lib/queryKeys';
+import { useDebounce } from '../hooks/useDebounce';
 import IssueDrawer from '../components/IssueDrawer';
 import BadgeComponent, { PriorityDot } from '../components/ui/Badge';
+import Button from '../components/ui/Button';
+import { PageLoader, SectionLoader } from '../components/ui/Spinner';
 import {
   STATUS_CONFIG, PRIORITY_CONFIG, SEVERITY_CONFIG,
   TC_STATUS_CONFIG, TYPE_CONFIG, SPRINT_STATUS_CONFIG,
   ISSUE_TYPES, ISSUE_PRIORITIES, ISSUE_SEVERITIES,
 } from '../utils/constants';
-import { capitalize } from '../utils/helpers';
+import { capitalize, parseSteps } from '../utils/helpers';
 import '../styles/project-detail.css';
 
 function Badge({ label, color, bg, small }) {
   return <BadgeComponent label={label} color={color} bg={bg} size={small ? 'sm' : 'md'} />;
 }
 
-/* ─────────── Issue row ─────────── */
-function IssueRow({ issue, onClick }) {
+/* ─────────── Issue row — memoised so the list doesn't re-render on every filter keystroke ─────────── */
+const IssueRow = memo(function IssueRow({ issue, onClick }) {
   const sc = STATUS_CONFIG[issue.status] || STATUS_CONFIG.open;
   return (
     <div className="pd-issue-row" onClick={onClick}>
@@ -37,7 +45,7 @@ function IssueRow({ issue, onClick }) {
       <span className="pd-issue-date">{new Date(issue.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
     </div>
   );
-}
+});
 
 /* ─────────── Predefined tag list ─────────── */
 const PREDEFINED_TAGS = [
@@ -46,7 +54,7 @@ const PREDEFINED_TAGS = [
   'Database', 'Authentication', 'Navigation', 'Layout',
 ];
 
-/* ─────────── Tag Selector (right panel) ─────────── */
+/* ─────────── Tag Selector ─────────── */
 function TagSelector({ tags, onChange }) {
   const [open, setOpen]     = useState(false);
   const [pos, setPos]       = useState({ top: 0, right: 0 });
@@ -54,27 +62,6 @@ function TagSelector({ tags, onChange }) {
   const btnRef  = useRef(null);
   const dropRef = useRef(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const fn = e => {
-      if (
-        dropRef.current && !dropRef.current.contains(e.target) &&
-        btnRef.current  && !btnRef.current.contains(e.target)
-      ) { setOpen(false); setSearch(''); }
-    };
-    document.addEventListener('mousedown', fn);
-    return () => document.removeEventListener('mousedown', fn);
-  }, [open]);
-
-  const openDropdown = () => {
-    const rect = btnRef.current.getBoundingClientRect();
-    setPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
-    setOpen(true);
-  };
-
-  const close = () => { setOpen(false); setSearch(''); };
-
-  // Predefined + any already-added custom tags (title-cased for display)
   const allOptions = [...new Set([
     ...PREDEFINED_TAGS,
     ...tags.map(t => t.charAt(0).toUpperCase() + t.slice(1)),
@@ -94,6 +81,14 @@ function TagSelector({ tags, onChange }) {
     if (!tags.includes(n)) onChange([...tags, n]);
     setSearch('');
   };
+
+  const openDropdown = () => {
+    const rect = btnRef.current.getBoundingClientRect();
+    setPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+    setOpen(true);
+  };
+
+  const close = () => { setOpen(false); setSearch(''); };
 
   return (
     <div className="ci-tag-selector">
@@ -134,7 +129,6 @@ function TagSelector({ tags, onChange }) {
               </svg>
             </button>
           </div>
-
           <div className="ci-tag-search-wrap">
             <input
               className="ci-tag-search"
@@ -145,7 +139,6 @@ function TagSelector({ tags, onChange }) {
               autoFocus
             />
           </div>
-
           <div className="ci-tag-list">
             {filtered.length === 0
               ? <div className="ci-tag-empty">No tags found</div>
@@ -164,7 +157,6 @@ function TagSelector({ tags, onChange }) {
                 })
             }
           </div>
-
           <button type="button" className="ci-tag-create" onClick={createNew}>
             {search.trim() ? `Create "${search.trim()}"` : '+ Create New Tag'}
           </button>
@@ -175,16 +167,10 @@ function TagSelector({ tags, onChange }) {
   );
 }
 
-/* ─────────── Issue Meta Field (right panel pill) ─────────── */
+/* ─────────── Issue Meta Field ─────────── */
 function MetaField({ label, value, options, onChange }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
-
-  useEffect(() => {
-    const fn = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', fn);
-    return () => document.removeEventListener('mousedown', fn);
-  }, []);
 
   const current = options.find(o => o.value === value) || options[0];
 
@@ -257,24 +243,12 @@ const FIELD_TYPES = {
 };
 const ALL_FIELD_TYPES = Object.values(FIELD_TYPES).flat();
 
-/* ─────────── TypeDropdown (grouped, portal) ─────────── */
+/* ─────────── TypeDropdown ─────────── */
 function TypeDropdown({ value, onChange }) {
   const [open, setOpen] = useState(false);
   const [pos,  setPos]  = useState({ top: 0, left: 0, width: 0 });
   const btnRef  = useRef(null);
   const dropRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const fn = e => {
-      if (
-        dropRef.current && !dropRef.current.contains(e.target) &&
-        btnRef.current  && !btnRef.current.contains(e.target)
-      ) setOpen(false);
-    };
-    document.addEventListener('mousedown', fn);
-    return () => document.removeEventListener('mousedown', fn);
-  }, [open]);
 
   const toggle = () => {
     if (!open) {
@@ -342,34 +316,37 @@ function AccordionSection({ title, open, onToggle, children, desc }) {
   );
 }
 
-/* ─────────── CustomFieldPanel (slide-in via portal) ─────────── */
-function CustomFieldPanel({ projectId, onClose, onCreate }) {
+/* ─────────── CustomFieldPanel ─────────── */
+function CustomFieldPanel({ projectId, onClose, onCreated }) {
   const [form, setForm] = useState({
     name: '', field_type: 'single_line_text', placeholder: '', mandatory: false,
     options: { prefix: '', suffix: '', min_length: '', max_length: '', default_value: '', description: '', show_when_status: 'all', show_for: 'all', edit_if: 'all', autofill_on_status: 'none' },
   });
-  const [saving, setSaving]   = useState(false);
-  const [error, setError]     = useState('');
+  const [error, setError]       = useState('');
   const [sections, setSections] = useState({ additional: false, conditions: false, autofill: false });
+  const queryClient = useQueryClient();
 
   const setF   = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const setOpt = (k, v) => setForm(p => ({ ...p, options: { ...p.options, [k]: v } }));
   const toggle = k => setSections(p => ({ ...p, [k]: !p[k] }));
 
-  const handleCreate = async () => {
-    if (!form.name.trim()) { setError('Field name is required'); return; }
-    setSaving(true);
-    try {
-      const res = await customFieldService.create(projectId, {
-        name: form.name.trim(), field_type: form.field_type,
-        placeholder: form.placeholder, mandatory: form.mandatory, options: form.options,
-      });
-      onCreate(res.data);
+  const createMutation = useMutation({
+    mutationFn: () => customFieldService.create(projectId, {
+      name: form.name.trim(), field_type: form.field_type,
+      placeholder: form.placeholder, mandatory: form.mandatory, options: form.options,
+    }),
+    onSuccess: (res) => {
+      queryClient.setQueryData(queryKeys.customFields(projectId), old => [...(old || []), res.data]);
+      onCreated(res.data);
       onClose();
-    } catch (err) {
-      setError(err?.response?.data?.error || 'Failed to create field');
-      setSaving(false);
-    }
+    },
+    onError: (err) => setError(err?.response?.data?.error || 'Failed to create field'),
+  });
+
+  const handleCreate = () => {
+    if (!form.name.trim()) { setError('Field name is required'); return; }
+    setError('');
+    createMutation.mutate();
   };
 
   return createPortal(
@@ -461,8 +438,8 @@ function CustomFieldPanel({ projectId, onClose, onCreate }) {
 
         <div className="cf-panel-footer">
           <button type="button" className="cf-btn-cancel" onClick={onClose}>Cancel</button>
-          <button type="button" className="cf-btn-create" disabled={saving} onClick={handleCreate}>
-            {saving ? 'Creating…' : 'Create'}
+          <button type="button" className="cf-btn-create" disabled={createMutation.isPending} onClick={handleCreate}>
+            {createMutation.isPending ? 'Creating…' : 'Create'}
           </button>
         </div>
       </div>
@@ -486,47 +463,51 @@ function CustomFieldInput({ field, value, onChange }) {
 }
 
 /* ─────────── Create Issue Modal ─────────── */
-function CreateIssueModal({ projectId, members, sprints, onClose, onCreate }) {
+function CreateIssueModal({ projectId, members, sprints, onClose }) {
   const [form, setForm] = useState({
     title: '', description: '',
     priority: 'medium', severity: 'medium', type: 'bug', status: 'open',
     tags: [], sprint_id: '', assignee_id: '', customValues: {},
   });
-  const [loading, setLoading]           = useState(false);
-  const [error, setError]               = useState('');
-  const [customFields, setCustomFields] = useState([]);
-  const [showCFPanel, setShowCFPanel]   = useState(false);
+  const [error, setError]             = useState('');
+  const [showCFPanel, setShowCFPanel] = useState(false);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    customFieldService.getAll(projectId)
-      .then(r => setCustomFields(r.data))
-      .catch(() => {});
-  }, [projectId]);
+  const { data: customFields = [] } = useQuery({
+    queryKey: queryKeys.customFields(projectId),
+    queryFn: () => customFieldService.getAll(projectId).then(r => r.data),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data) => issueService.create(projectId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.issues(projectId) });
+      onClose();
+    },
+    onError: () => { setError('Failed to create issue'); },
+  });
 
   const set    = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const setCFV = (id, v) => setForm(p => ({ ...p, customValues: { ...p.customValues, [id]: v } }));
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.title.trim()) { setError('Issue summary is required'); return; }
     const missing = customFields.filter(f => f.mandatory && !form.customValues[f.id]?.toString().trim());
     if (missing.length) { setError(`Required: ${missing.map(f => f.name).join(', ')}`); return; }
-    setLoading(true);
-    try {
-      await onCreate({
-        title: form.title.trim(),
-        description: form.description,
-        priority: form.priority,
-        severity: form.severity,
-        type: form.type,
-        status: form.status,
-        tags: form.tags,
-        sprint_id: form.sprint_id || null,
-        assignee_id: form.assignee_id || null,
-        custom_fields: form.customValues,
-      });
-      onClose();
-    } catch { setError('Failed to create issue'); setLoading(false); }
+    setError('');
+    createMutation.mutate({
+      title: form.title.trim(),
+      description: form.description,
+      priority: form.priority,
+      severity: form.severity,
+      type: form.type,
+      status: form.status,
+      tags: form.tags,
+      sprint_id: form.sprint_id || null,
+      assignee_id: form.assignee_id || null,
+      custom_fields: form.customValues,
+    });
   };
 
   const typeOptions     = ISSUE_TYPES.map(t => ({ value: t, label: TYPE_CONFIG[t].label, icon: TYPE_CONFIG[t].icon, bg: '#f3f4f6', color: '#374151' }));
@@ -540,7 +521,6 @@ function CreateIssueModal({ projectId, members, sprints, onClose, onCreate }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="ci-modal" onClick={e => e.stopPropagation()}>
 
-        {/* Header */}
         <div className="ci-header">
           <h2 className="ci-title">Add New Issue</h2>
           <button type="button" className="ci-close-btn" onClick={onClose}>
@@ -554,10 +534,7 @@ function CreateIssueModal({ projectId, members, sprints, onClose, onCreate }) {
 
         <form onSubmit={handleSubmit}>
           <div className="ci-body">
-
-            {/* ── Left panel ── */}
             <div className="ci-left">
-
               <div className="ci-field">
                 <label className="ci-label">Summary <span className="ci-req">*</span></label>
                 <input
@@ -608,7 +585,6 @@ function CreateIssueModal({ projectId, members, sprints, onClose, onCreate }) {
                 </div>
               </div>
 
-              {/* Custom field inputs */}
               {customFields.map(f => (
                 <div key={f.id} className="ci-field">
                   <label className="ci-label">
@@ -624,20 +600,14 @@ function CreateIssueModal({ projectId, members, sprints, onClose, onCreate }) {
               ))}
             </div>
 
-            {/* ── Right panel — metadata ── */}
             <div className="ci-right">
               <p className="ci-right-label">Properties</p>
-
               <MetaField label="Type"     value={form.type}     options={typeOptions}     onChange={v => set('type', v)} />
               <MetaField label="Severity" value={form.severity} options={severityOptions} onChange={v => set('severity', v)} />
               <MetaField label="Priority" value={form.priority} options={priorityOptions} onChange={v => set('priority', v)} />
-
-              {/* Tags */}
               <TagSelector tags={form.tags} onChange={v => set('tags', v)} />
-
               <MetaField label="Status" value={form.status} options={statusOptions} onChange={v => set('status', v)} />
 
-              {/* Add Custom Field */}
               <button type="button" className="ci-custom-field-btn" onClick={() => setShowCFPanel(true)}>
                 <span className="ci-tag-btn-icon">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -653,15 +623,14 @@ function CreateIssueModal({ projectId, members, sprints, onClose, onCreate }) {
             <CustomFieldPanel
               projectId={projectId}
               onClose={() => setShowCFPanel(false)}
-              onCreate={field => setCustomFields(prev => [...prev, field])}
+              onCreated={() => {}}
             />
           )}
 
-          {/* Footer */}
           <div className="ci-footer">
             <button type="button" className="ci-btn-cancel" onClick={onClose}>Cancel</button>
-            <button type="submit" className="ci-btn-submit" disabled={loading}>
-              {loading
+            <button type="submit" className="ci-btn-submit" disabled={createMutation.isPending}>
+              {createMutation.isPending
                 ? <><span className="spinner spinner-white spinner-sm" /> Creating…</>
                 : 'Add Issue'
               }
@@ -674,20 +643,21 @@ function CreateIssueModal({ projectId, members, sprints, onClose, onCreate }) {
 }
 
 /* ─────────── Create Test Case Modal ─────────── */
-function CreateTestModal({ projectId, onClose, onCreate }) {
+function CreateTestModal({ projectId, onClose }) {
   const [form, setForm] = useState({ title: '', description: '', expected_result: '', priority: 'medium', steps: '' });
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const steps = form.steps
-        ? form.steps.split('\n').map((s, i) => ({ step: i + 1, action: s.trim() })).filter(s => s.action)
-        : [];
-      await onCreate({ title: form.title, description: form.description, expected_result: form.expected_result, priority: form.priority, steps });
+  const createMutation = useMutation({
+    mutationFn: (data) => testCaseService.create(projectId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.testCases(projectId) });
       onClose();
-    } catch { setLoading(false); }
+    },
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    createMutation.mutate({ title: form.title, description: form.description, expected_result: form.expected_result, priority: form.priority, steps: parseSteps(form.steps) });
   };
 
   const f = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
@@ -711,7 +681,9 @@ function CreateTestModal({ projectId, onClose, onCreate }) {
           </div>
           <div className="pd-modal-footer">
             <button type="button" className="pd-btn-cancel" onClick={onClose}>Cancel</button>
-            <button type="submit" className="pd-btn-primary" disabled={loading}>{loading ? 'Creating…' : 'Create Test Case'}</button>
+            <Button type="submit" loading={createMutation.isPending}>
+              {createMutation.isPending ? 'Creating…' : 'Create Test Case'}
+            </Button>
           </div>
         </form>
       </div>
@@ -720,15 +692,24 @@ function CreateTestModal({ projectId, onClose, onCreate }) {
 }
 
 /* ─────────── Create Sprint Modal ─────────── */
-function CreateSprintModal({ onClose, onCreate }) {
+function CreateSprintModal({ projectId, onClose }) {
   const [form, setForm] = useState({ name: '', goal: '', start_date: '', end_date: '' });
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
+
+  const createMutation = useMutation({
+    mutationFn: (data) => sprintService.create(projectId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.sprints(projectId) });
+      onClose();
+    },
+  });
+
   const f = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    setLoading(true);
-    try { await onCreate(form); onClose(); } catch { setLoading(false); }
+    createMutation.mutate(form);
   };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="pd-modal" onClick={e => e.stopPropagation()}>
@@ -742,7 +723,9 @@ function CreateSprintModal({ onClose, onCreate }) {
           </div>
           <div className="pd-modal-footer">
             <button type="button" className="pd-btn-cancel" onClick={onClose}>Cancel</button>
-            <button type="submit" className="pd-btn-primary" disabled={loading}>{loading ? 'Creating…' : 'Create Sprint'}</button>
+            <Button type="submit" loading={createMutation.isPending}>
+              {createMutation.isPending ? 'Creating…' : 'Create Sprint'}
+            </Button>
           </div>
         </form>
       </div>
@@ -752,17 +735,12 @@ function CreateSprintModal({ onClose, onCreate }) {
 
 /* ─────────── Reports Tab ─────────── */
 function ReportsTab({ projectId }) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading } = useQuery({
+    queryKey: queryKeys.dashboard(projectId),
+    queryFn: () => analyticsService.getDashboard(projectId).then(r => r.data),
+  });
 
-  useEffect(() => {
-    analyticsService.getDashboard(projectId)
-      .then(r => setData(r.data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [projectId]);
-
-  if (loading) return <div style={{ textAlign: 'center', padding: 48 }}><div className="spinner" /></div>;
+  if (isLoading) return <SectionLoader padding={48} />;
   if (!data) return <div className="pd-empty">Failed to load analytics.</div>;
 
   const { stats, byStatus, byPriority } = data;
@@ -850,122 +828,131 @@ function ReportsTab({ projectId }) {
 export default function ProjectDetail() {
   const { projectId } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  const [project, setProject]     = useState(null);
-  const [issues, setIssues]       = useState([]);
-  const [testCases, setTestCases] = useState([]);
-  const [sprints, setSprints]     = useState([]);
-  const [members, setMembers]     = useState([]);
-  const [activeTab, setActiveTab] = useState('issues');
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState('');
-
+  const [activeTab, setActiveTab]           = useState('issues');
   const [activeIssue, setActiveIssue]       = useState(null);
   const [showIssueModal, setShowIssueModal] = useState(false);
   const [showTestModal, setShowTestModal]   = useState(false);
   const [showSprintModal, setShowSprintModal] = useState(false);
 
-  // Issue filters
   const [filterStatus,   setFilterStatus]   = useState('');
   const [filterPriority, setFilterPriority] = useState('');
   const [filterSeverity, setFilterSeverity] = useState('');
   const [filterType,     setFilterType]     = useState('');
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search);
 
-  useEffect(() => { fetchAll(); }, [projectId]);
+  const projectQuery = useQuery({
+    queryKey: queryKeys.project(projectId),
+    queryFn: () => projectService.getById(projectId).then(r => r.data),
+  });
 
-  const fetchAll = async () => {
-    try {
-      setLoading(true);
-      const [projRes, issuesRes, testsRes, sprintsRes, teamsRes] = await Promise.all([
-        projectService.getById(projectId),
-        issueService.getAll(projectId),
-        testCaseService.getAll(projectId),
-        sprintService.getAll(projectId),
-        teamService.getAll(),
-      ]);
-      const proj = projRes.data;
-      setProject(proj);
-      setIssues(issuesRes.data);
-      setTestCases(testsRes.data);
-      setSprints(sprintsRes.data);
-      // Prefer the project's own team; fall back to all members across the user's teams
-      const projectTeam = teamsRes.data.find(t => t.id === proj.team_id);
-      const allMembers  = (projectTeam?.members?.length
-        ? projectTeam.members
-        : teamsRes.data.flatMap(t => t.members || []));
-      setMembers([...new Map(allMembers.map(m => [m.id, m])).values()]);
-    } catch { setError('Failed to load project data'); }
-    finally { setLoading(false); }
-  };
+  const issuesQuery = useQuery({
+    queryKey: queryKeys.issues(projectId),
+    queryFn: () => issueService.getAll(projectId).then(r => r.data),
+    enabled: !!projectId,
+  });
 
-  const fetchIssues = async () => {
-    const res = await issueService.getAll(projectId);
-    setIssues(res.data);
-  };
+  const testCasesQuery = useQuery({
+    queryKey: queryKeys.testCases(projectId),
+    queryFn: () => testCaseService.getAll(projectId).then(r => r.data),
+    enabled: !!projectId,
+  });
 
-  const handleCreateIssue = async (data) => {
-    await issueService.create(projectId, data);
-    fetchIssues();
-  };
+  const sprintsQuery = useQuery({
+    queryKey: queryKeys.sprints(projectId),
+    queryFn: () => sprintService.getAll(projectId).then(r => r.data),
+    enabled: !!projectId,
+  });
 
-  const handleCreateTest = async (data) => {
-    await testCaseService.create(projectId, data);
-    const res = await testCaseService.getAll(projectId);
-    setTestCases(res.data);
-  };
+  const teamsQuery = useQuery({
+    queryKey: queryKeys.teams(),
+    queryFn: () => teamService.getAll().then(r => r.data),
+  });
 
-  const handleCreateSprint = async (data) => {
-    await sprintService.create(projectId, data);
-    const res = await sprintService.getAll(projectId);
-    setSprints(res.data);
-  };
+  const project   = projectQuery.data;
+  const issues    = issuesQuery.data    ?? [];
+  const testCases = testCasesQuery.data ?? [];
+  const sprints   = sprintsQuery.data   ?? [];
 
-  const handleUpdateIssue = (updated) => {
-    setIssues(prev => prev.map(i => i.id === updated.id ? { ...i, ...updated } : i));
-  };
+  const members = useMemo(() => {
+    const teams = teamsQuery.data ?? [];
+    const projectTeam = teams.find(t => t.id === project?.team_id);
+    const allMembers = projectTeam?.members?.length
+      ? projectTeam.members
+      : teams.flatMap(t => t.members || []);
+    return [...new Map(allMembers.map(m => [m.id, m])).values()];
+  }, [teamsQuery.data, project?.team_id]);
 
-  const handleDeleteIssue = (id) => {
-    setIssues(prev => prev.filter(i => i.id !== id));
-  };
+  /* ── Test Case mutations ── */
+  const deleteTestMutation = useMutation({
+    mutationFn: (id) => testCaseService.delete(projectId, id),
+    onSuccess: (_, id) => {
+      queryClient.setQueryData(queryKeys.testCases(projectId), old => old?.filter(t => t.id !== id) ?? []);
+    },
+  });
 
-  const handleDeleteTest = async (id) => {
+  const updateTestMutation = useMutation({
+    mutationFn: ({ id, status }) => testCaseService.update(projectId, id, { status }),
+    onSuccess: (_, { id, status }) => {
+      queryClient.setQueryData(queryKeys.testCases(projectId),
+        old => old?.map(t => t.id === id ? { ...t, status } : t) ?? []);
+    },
+  });
+
+  /* ── Sprint mutations ── */
+  const deleteSprintMutation = useMutation({
+    mutationFn: (id) => sprintService.delete(projectId, id),
+    onSuccess: (_, id) => {
+      queryClient.setQueryData(queryKeys.sprints(projectId), old => old?.filter(s => s.id !== id) ?? []);
+    },
+  });
+
+  const updateSprintMutation = useMutation({
+    mutationFn: ({ id, status }) => sprintService.update(projectId, id, { status }),
+    onSuccess: (res, { id }) => {
+      queryClient.setQueryData(queryKeys.sprints(projectId),
+        old => old?.map(s => s.id === id ? { ...s, ...res.data.sprint } : s) ?? []);
+    },
+  });
+
+  const handleUpdateIssue = useCallback((updated) => {
+    queryClient.setQueryData(queryKeys.issues(projectId),
+      old => old?.map(i => i.id === updated.id ? { ...i, ...updated } : i) ?? []);
+  }, [queryClient, projectId]);
+
+  const handleDeleteIssue = useCallback((id) => {
+    queryClient.setQueryData(queryKeys.issues(projectId), old => old?.filter(i => i.id !== id) ?? []);
+    setActiveIssue(null);
+  }, [queryClient, projectId]);
+
+  const handleDeleteTest = useCallback((id) => {
     if (!window.confirm('Delete this test case?')) return;
-    await testCaseService.delete(projectId, id);
-    setTestCases(prev => prev.filter(t => t.id !== id));
-  };
+    deleteTestMutation.mutate(id);
+  }, [deleteTestMutation.mutate]);
 
-  const handleDeleteSprint = async (id) => {
+  const handleDeleteSprint = useCallback((id) => {
     if (!window.confirm('Delete this sprint? Issues will be unassigned from it.')) return;
-    await sprintService.delete(projectId, id);
-    setSprints(prev => prev.filter(s => s.id !== id));
-  };
+    deleteSprintMutation.mutate(id);
+  }, [deleteSprintMutation.mutate]);
 
-  const handleSprintStatusChange = async (sprint, status) => {
-    const res = await sprintService.update(projectId, sprint.id, { status });
-    setSprints(prev => prev.map(s => s.id === sprint.id ? { ...s, ...res.data.sprint } : s));
-  };
-
-  const handleTestStatusChange = async (tc, status) => {
-    await testCaseService.update(projectId, tc.id, { status });
-    setTestCases(prev => prev.map(t => t.id === tc.id ? { ...t, status } : t));
-  };
-
-  const filteredIssues = issues.filter(i => {
+  const filteredIssues = useMemo(() => issues.filter(i => {
     if (filterStatus   && i.status   !== filterStatus)   return false;
     if (filterPriority && i.priority !== filterPriority) return false;
     if (filterSeverity && i.severity !== filterSeverity) return false;
     if (filterType     && i.type     !== filterType)     return false;
-    if (search && !i.title.toLowerCase().includes(search.toLowerCase())) return false;
+    if (debouncedSearch && !i.title.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
     return true;
-  });
+  }), [issues, filterStatus, filterPriority, filterSeverity, filterType, debouncedSearch]);
 
-  const openCount      = issues.filter(i => i.status === 'open').length;
-  const inProgCount    = issues.filter(i => i.status === 'in_progress').length;
-  const closedCount    = issues.filter(i => i.status === 'closed').length;
-  const criticalCount  = issues.filter(i => i.priority === 'critical').length;
+  const openCount     = useMemo(() => issues.filter(i => i.status === 'open').length,        [issues]);
+  const inProgCount   = useMemo(() => issues.filter(i => i.status === 'in_progress').length, [issues]);
+  const closedCount   = useMemo(() => issues.filter(i => i.status === 'closed').length,      [issues]);
+  const criticalCount = useMemo(() => issues.filter(i => i.priority === 'critical').length,  [issues]);
 
-  if (loading) return <div className="page-wrapper" style={{ textAlign: 'center', padding: 60 }}><div className="spinner spinner-lg" /></div>;
+  if (projectQuery.isLoading) return <PageLoader />;
+
   if (!project) return (
     <div className="page-wrapper">
       <div className="alert alert-error">Project not found</div>
@@ -998,10 +985,10 @@ export default function ProjectDetail() {
       {/* ── Stats strip ── */}
       <div className="pd-stats-strip">
         {[
-          { label: 'Open',        val: openCount,     color: '#3b82f6' },
-          { label: 'In Progress', val: inProgCount,   color: '#f59e0b' },
-          { label: 'Closed',      val: closedCount,   color: '#10b981' },
-          { label: 'Critical',    val: criticalCount, color: '#ef4444' },
+          { label: 'Open',        val: openCount,        color: '#3b82f6' },
+          { label: 'In Progress', val: inProgCount,      color: '#f59e0b' },
+          { label: 'Closed',      val: closedCount,      color: '#10b981' },
+          { label: 'Critical',    val: criticalCount,    color: '#ef4444' },
           { label: 'Test Cases',  val: testCases.length, color: '#8b5cf6' },
           { label: 'Sprints',     val: sprints.length,   color: '#06b6d4' },
         ].map(s => (
@@ -1012,15 +999,13 @@ export default function ProjectDetail() {
         ))}
       </div>
 
-      {error && <div className="alert alert-error">{error}</div>}
-
       {/* ── Tabs ── */}
       <div className="pd-tabs">
         {[
-          { key: 'issues',  label: `Issues`,     count: issues.length },
-          { key: 'tests',   label: `Test Cases`, count: testCases.length },
-          { key: 'sprints', label: `Sprints`,    count: sprints.length },
-          { key: 'reports', label: `Reports` },
+          { key: 'issues',  label: 'Issues',     count: issues.length },
+          { key: 'tests',   label: 'Test Cases', count: testCases.length },
+          { key: 'sprints', label: 'Sprints',    count: sprints.length },
+          { key: 'reports', label: 'Reports' },
         ].map(t => (
           <button
             key={t.key}
@@ -1036,7 +1021,6 @@ export default function ProjectDetail() {
       {/* ════════ ISSUES TAB ════════ */}
       {activeTab === 'issues' && (
         <div className="pd-tab-content">
-          {/* Toolbar */}
           <div className="pd-toolbar">
             <button className="pd-btn-primary" onClick={() => setShowIssueModal(true)}>+ New Issue</button>
             <div className="pd-search-wrap">
@@ -1064,7 +1048,6 @@ export default function ProjectDetail() {
             )}
           </div>
 
-          {/* Table header */}
           {filteredIssues.length > 0 && (
             <div className="pd-issues-header">
               <span style={{ width: 8 }} />
@@ -1078,8 +1061,9 @@ export default function ProjectDetail() {
             </div>
           )}
 
-          {/* Issue rows */}
-          {filteredIssues.length === 0 ? (
+          {issuesQuery.isLoading ? (
+            <SectionLoader />
+          ) : filteredIssues.length === 0 ? (
             <div className="pd-empty">
               <div className="pd-empty-icon">🐛</div>
               <p>{issues.length === 0 ? 'No issues yet. Create the first one.' : 'No issues match the current filters.'}</p>
@@ -1101,7 +1085,9 @@ export default function ProjectDetail() {
           <div className="pd-toolbar">
             <button className="pd-btn-primary" onClick={() => setShowTestModal(true)}>+ New Test Case</button>
           </div>
-          {testCases.length === 0 ? (
+          {testCasesQuery.isLoading ? (
+            <SectionLoader />
+          ) : testCases.length === 0 ? (
             <div className="pd-empty">
               <div className="pd-empty-icon">✅</div>
               <p>No test cases yet.</p>
@@ -1126,7 +1112,7 @@ export default function ProjectDetail() {
                       <select
                         className="pd-tc-status-select"
                         value={tc.status}
-                        onChange={e => handleTestStatusChange(tc, e.target.value)}
+                        onChange={e => updateTestMutation.mutate({ id: tc.id, status: e.target.value })}
                         style={{ color: sc.color, background: sc.bg }}
                       >
                         {Object.entries(TC_STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
@@ -1149,7 +1135,9 @@ export default function ProjectDetail() {
           <div className="pd-toolbar">
             <button className="pd-btn-primary" onClick={() => setShowSprintModal(true)}>+ New Sprint</button>
           </div>
-          {sprints.length === 0 ? (
+          {sprintsQuery.isLoading ? (
+            <SectionLoader />
+          ) : sprints.length === 0 ? (
             <div className="pd-empty">
               <div className="pd-empty-icon">🏃</div>
               <p>No sprints yet. Create your first sprint to organize work.</p>
@@ -1173,7 +1161,7 @@ export default function ProjectDetail() {
                         <select
                           className="pd-sprint-status-select"
                           value={sprint.status}
-                          onChange={e => handleSprintStatusChange(sprint, e.target.value)}
+                          onChange={e => updateSprintMutation.mutate({ id: sprint.id, status: e.target.value })}
                           style={{ color: sc.color, background: sc.bg }}
                         >
                           {Object.entries(SPRINT_STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
@@ -1207,15 +1195,24 @@ export default function ProjectDetail() {
 
       {/* ── Modals ── */}
       {showIssueModal && (
-        <CreateIssueModal projectId={projectId} members={members} sprints={sprints}
-          onClose={() => setShowIssueModal(false)} onCreate={handleCreateIssue} />
+        <CreateIssueModal
+          projectId={projectId}
+          members={members}
+          sprints={sprints}
+          onClose={() => setShowIssueModal(false)}
+        />
       )}
       {showTestModal && (
-        <CreateTestModal projectId={projectId}
-          onClose={() => setShowTestModal(false)} onCreate={handleCreateTest} />
+        <CreateTestModal
+          projectId={projectId}
+          onClose={() => setShowTestModal(false)}
+        />
       )}
       {showSprintModal && (
-        <CreateSprintModal onClose={() => setShowSprintModal(false)} onCreate={handleCreateSprint} />
+        <CreateSprintModal
+          projectId={projectId}
+          onClose={() => setShowSprintModal(false)}
+        />
       )}
 
       {/* ── Issue Drawer ── */}

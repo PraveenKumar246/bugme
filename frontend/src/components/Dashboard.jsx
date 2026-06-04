@@ -1,32 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import api from '../services/api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { analyticsService } from '../services/api';
+import { queryKeys } from '../lib/queryKeys';
 import '../styles/dashboard.css';
 
 function Dashboard({ projectId }) {
-  const [dashboardData, setDashboardData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, [projectId]);
+  const { data: dashboardData, isLoading, error } = useQuery({
+    queryKey: queryKeys.dashboard(projectId),
+    queryFn: () => analyticsService.getDashboard(projectId).then(r => r.data),
+  });
 
-  const fetchDashboardData = async () => {
-    try {
-      setLoading(true);
-      const response = await api.get(
-        `/projects/${projectId}/analytics/dashboard`
-      );
-      setDashboardData(response.data);
-    } catch (err) {
-      setError('Failed to load dashboard');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="dashboard-loading">
         <div className="loading"></div>
@@ -34,18 +19,14 @@ function Dashboard({ projectId }) {
     );
   }
 
-  if (!dashboardData) {
-    return <div className="alert alert-error">{error || 'No data'}</div>;
+  if (error || !dashboardData) {
+    return <div className="alert alert-error">Failed to load dashboard</div>;
   }
 
   const { stats, byStatus, byPriority, coverage, recent } = dashboardData;
 
   const getStatusColor = (status) => {
-    const colors = {
-      open: '#ff6b6b',
-      in_progress: '#ffa94d',
-      closed: '#51cf66',
-    };
+    const colors = { open: '#ff6b6b', in_progress: '#ffa94d', closed: '#51cf66' };
     return colors[status] || '#999';
   };
 
@@ -55,7 +36,7 @@ function Dashboard({ projectId }) {
         <h2>📊 Project Analytics</h2>
         <button
           className="btn btn-secondary btn-small"
-          onClick={fetchDashboardData}
+          onClick={() => queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(projectId) })}
         >
           🔄 Refresh
         </button>
@@ -70,7 +51,6 @@ function Dashboard({ projectId }) {
             <div className="stat-value">{stats.total_issues}</div>
           </div>
         </div>
-
         <div className="stat-card">
           <div className="stat-icon">🟢</div>
           <div className="stat-content">
@@ -78,7 +58,6 @@ function Dashboard({ projectId }) {
             <div className="stat-value">{stats.open_issues}</div>
           </div>
         </div>
-
         <div className="stat-card">
           <div className="stat-icon">🟡</div>
           <div className="stat-content">
@@ -86,7 +65,6 @@ function Dashboard({ projectId }) {
             <div className="stat-value">{stats.in_progress_issues}</div>
           </div>
         </div>
-
         <div className="stat-card">
           <div className="stat-icon">✅</div>
           <div className="stat-content">
@@ -94,7 +72,6 @@ function Dashboard({ projectId }) {
             <div className="stat-value">{stats.closed_issues}</div>
           </div>
         </div>
-
         <div className="stat-card">
           <div className="stat-icon">🚨</div>
           <div className="stat-content">
@@ -102,7 +79,6 @@ function Dashboard({ projectId }) {
             <div className="stat-value">{stats.critical_count}</div>
           </div>
         </div>
-
         <div className="stat-card">
           <div className="stat-icon">⚠️</div>
           <div className="stat-content">
@@ -110,7 +86,6 @@ function Dashboard({ projectId }) {
             <div className="stat-value">{stats.high_count}</div>
           </div>
         </div>
-
         <div className="stat-card">
           <div className="stat-icon">✍️</div>
           <div className="stat-content">
@@ -118,21 +93,17 @@ function Dashboard({ projectId }) {
             <div className="stat-value">{stats.total_test_cases}</div>
           </div>
         </div>
-
         <div className="stat-card">
           <div className="stat-icon">📈</div>
           <div className="stat-content">
             <div className="stat-label">Coverage</div>
-            <div className="stat-value">
-              {coverage.coverage_percentage || 0}%
-            </div>
+            <div className="stat-value">{coverage.coverage_percentage || 0}%</div>
           </div>
         </div>
       </div>
 
       {/* Charts Section */}
       <div className="charts-grid">
-        {/* Issues by Status */}
         <div className="chart-card">
           <h3>Issues by Status</h3>
           <div className="chart-content">
@@ -145,10 +116,7 @@ function Dashboard({ projectId }) {
                       <div
                         className="bar"
                         style={{
-                          width: `${
-                            (item.count / Math.max(...byStatus.map((s) => s.count))) *
-                            100
-                          }%`,
+                          width: `${(item.count / Math.max(...byStatus.map((s) => s.count))) * 100}%`,
                           backgroundColor: getStatusColor(item.status),
                         }}
                       >
@@ -164,7 +132,6 @@ function Dashboard({ projectId }) {
           </div>
         </div>
 
-        {/* Issues by Priority */}
         <div className="chart-card">
           <h3>Issues by Priority</h3>
           <div className="chart-content">
@@ -174,7 +141,7 @@ function Dashboard({ projectId }) {
                   <div key={item.priority} className="priority-item">
                     <div className="priority-label">
                       <span className="priority-badge" style={{
-                        borderColor: item.priority === 'critical' ? '#ff6b6b' : 
+                        borderColor: item.priority === 'critical' ? '#ff6b6b' :
                                     item.priority === 'high' ? '#ffa94d' :
                                     item.priority === 'medium' ? '#ffd43b' : '#51cf66'
                       }}>
@@ -210,25 +177,15 @@ function Dashboard({ projectId }) {
                 <tr key={issue.id}>
                   <td className="issue-title">{issue.title}</td>
                   <td>
-                    <span
-                      className="priority-badge"
-                      style={{
-                        borderColor:
-                          issue.priority === 'critical'
-                            ? '#ff6b6b'
-                            : issue.priority === 'high'
-                            ? '#ffa94d'
-                            : issue.priority === 'medium'
-                            ? '#ffd43b'
-                            : '#51cf66',
-                      }}
-                    >
+                    <span className="priority-badge" style={{
+                      borderColor: issue.priority === 'critical' ? '#ff6b6b' :
+                                  issue.priority === 'high' ? '#ffa94d' :
+                                  issue.priority === 'medium' ? '#ffd43b' : '#51cf66',
+                    }}>
                       {issue.priority}
                     </span>
                   </td>
-                  <td>
-                    <span className="status-badge">{issue.status}</span>
-                  </td>
+                  <td><span className="status-badge">{issue.status}</span></td>
                   <td className="creator-name">{issue.created_by_name}</td>
                 </tr>
               ))}

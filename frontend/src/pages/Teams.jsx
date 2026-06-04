@@ -1,17 +1,22 @@
-import { useState, useEffect } from 'react';
+import { memo, useState, useCallback, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { teamService } from '../services/api';
+import { queryKeys } from '../lib/queryKeys';
+import { useDebounce } from '../hooks/useDebounce';
+import Button from '../components/ui/Button';
+import Modal, { ModalHeader, ModalBody, ModalFooter } from '../components/ui/Modal';
+import { PageLoader } from '../components/ui/Spinner';
+import EmptyState from '../components/ui/EmptyState';
+import PageHeader from '../components/ui/PageHeader';
+import SearchInput from '../components/ui/SearchInput';
+import StatStrip from '../components/ui/StatStrip';
 import { getInitials, avatarHue } from '../utils/helpers';
 import '../styles/teams.css';
 
 const getColor = (name) => `hsl(${avatarHue(name)},60%,50%)`;
 
-const IconSearch = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-  </svg>
-);
-
+// ─── Shared icons ─────────────────────────────────────────────────────────────
 const IconTeams = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -28,16 +33,17 @@ const IconBell = () => (
   </svg>
 );
 
-const IconChevron = () => (
+const IconChevronLeft = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="15 18 9 12 15 6"/>
   </svg>
 );
 
-function TeamCard({ team, currentUser, onDelete, onInvite, onSelect }) {
-  const owner = team.members?.find(m => m.role === 'owner');
+// ─── TeamCard ─────────────────────────────────────────────────────────────────
+const TeamCard = memo(function TeamCard({ team, currentUser, onDelete, onInvite, onSelect }) {
+  const owner        = team.members?.find(m => m.role === 'owner');
   const otherMembers = team.members?.filter(m => m.role !== 'owner') || [];
-  const isOwner = team.owner_id === currentUser?.id;
+  const isOwner      = team.owner_id === currentUser?.id;
 
   return (
     <div className="team-card" onClick={() => onSelect(team)}>
@@ -54,8 +60,7 @@ function TeamCard({ team, currentUser, onDelete, onInvite, onSelect }) {
       {owner && (
         <div className="team-card-owner">
           <div className="member-avatar" style={{ background: getColor(owner.name) }}>
-            {getInitials(owner.name)}
-            <span className="crown-badge">👑</span>
+            {getInitials(owner.name)}<span className="crown-badge">👑</span>
           </div>
           <div className="member-info">
             <div className="member-name">{owner.name}</div>
@@ -66,12 +71,7 @@ function TeamCard({ team, currentUser, onDelete, onInvite, onSelect }) {
 
       <div className="team-card-members">
         {team.members?.slice(0, 5).map((m, i) => (
-          <div
-            key={m.id}
-            className="member-avatar-sm"
-            style={{ background: getColor(m.name), zIndex: 10 - i }}
-            title={m.name}
-          >
+          <div key={m.id} className="member-avatar-sm" style={{ background: getColor(m.name), zIndex: 10 - i }} title={m.name}>
             {getInitials(m.name)}
           </div>
         ))}
@@ -83,70 +83,54 @@ function TeamCard({ team, currentUser, onDelete, onInvite, onSelect }) {
       </div>
     </div>
   );
-}
+});
 
-function TeamDetail({ team, currentUser, onBack, onInvite, onRemoveMember }) {
+// ─── TeamDetail ───────────────────────────────────────────────────────────────
+const TeamDetail = memo(function TeamDetail({ team, currentUser, onBack, onInvite, onRemoveMember }) {
   const [search, setSearch] = useState('');
-  const isOwner = team.owner_id === currentUser?.id;
+  const debouncedSearch     = useDebounce(search);
+  const isOwner             = team.owner_id === currentUser?.id;
 
-  const filtered = (team.members || []).filter(m =>
-    m.name.toLowerCase().includes(search.toLowerCase()) ||
-    m.email.toLowerCase().includes(search.toLowerCase())
+  const filtered = useMemo(() =>
+    (team.members || []).filter(m =>
+      m.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+      m.email.toLowerCase().includes(debouncedSearch.toLowerCase())
+    ),
+    [team.members, debouncedSearch]
   );
 
   return (
     <div>
       <button className="team-detail-back" onClick={onBack}>
-        <IconChevron /> Back to Teams
+        <IconChevronLeft /> Back to Teams
       </button>
 
-      {/* Hero card */}
       <div className="team-detail-hero">
         <div className="team-detail-hero-info">
           <h2>{team.name}</h2>
           <p>{team.description || 'No description provided.'}</p>
           {isOwner && (
-            <button className="btn btn-primary" onClick={() => onInvite(team)}>
-              + Invite Members
-            </button>
+            <button className="btn btn-primary" onClick={() => onInvite(team)}>+ Invite Members</button>
           )}
         </div>
         <div className="team-detail-hero-avatars">
           {(team.members || []).slice(0, 6).map((m, i) => (
-            <div
-              key={m.id}
-              className="member-avatar-sm team-detail-avatar"
-              style={{ background: getColor(m.name), zIndex: 10 - i }}
-              title={m.name}
-            >
+            <div key={m.id} className="member-avatar-sm team-detail-avatar"
+              style={{ background: getColor(m.name), zIndex: 10 - i }} title={m.name}>
               {getInitials(m.name)}
             </div>
           ))}
         </div>
       </div>
 
-      {/* Toolbar */}
       <div className="teams-toolbar">
-        <div className="teams-search">
-          <IconSearch />
-          <input
-            type="text"
-            placeholder="Search members…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-        <span className="teams-count">
-          Total Members: {team.members?.length || 0}
-        </span>
+        <SearchInput value={search} onChange={e => setSearch(e.target.value)} placeholder="Search members…" />
+        <span className="teams-count">Total Members: {team.members?.length || 0}</span>
       </div>
 
-      {/* Member list */}
       <div className="member-list">
         {filtered.length === 0 ? (
-          <div className="member-list-empty">
-            {search ? 'No members match your search.' : 'No members yet.'}
-          </div>
+          <div className="member-list-empty">{search ? 'No members match your search.' : 'No members yet.'}</div>
         ) : (
           filtered.map(m => {
             const isSelf = m.id === currentUser?.id;
@@ -163,24 +147,12 @@ function TeamDetail({ team, currentUser, onBack, onInvite, onRemoveMember }) {
                   </div>
                 </div>
                 <div className="member-row-right">
-                  <span className={`role-badge role-${m.role}`}>
-                    {m.role === 'owner' ? 'Owner' : 'Member'}
-                  </span>
+                  <span className={`role-badge role-${m.role}`}>{m.role === 'owner' ? 'Owner' : 'Member'}</span>
                   {isOwner && !isSelf && (
-                    <button
-                      className="btn-member-action btn-remove"
-                      onClick={() => onRemoveMember(team.id, m.id, false)}
-                    >
-                      Remove
-                    </button>
+                    <button className="btn-member-action btn-remove" onClick={() => onRemoveMember(team.id, m.id, false)}>Remove</button>
                   )}
                   {!isOwner && isSelf && (
-                    <button
-                      className="btn-member-action btn-leave"
-                      onClick={() => onRemoveMember(team.id, m.id, true)}
-                    >
-                      Leave
-                    </button>
+                    <button className="btn-member-action btn-leave" onClick={() => onRemoveMember(team.id, m.id, true)}>Leave</button>
                   )}
                 </div>
               </div>
@@ -190,253 +162,187 @@ function TeamDetail({ team, currentUser, onBack, onInvite, onRemoveMember }) {
       </div>
     </div>
   );
-}
+});
 
-function CreateTeamModal({ onClose, onCreate }) {
-  const [name, setName] = useState('');
+// ─── CreateTeamModal ──────────────────────────────────────────────────────────
+function CreateTeamModal({ onClose }) {
+  const [name, setName]             = useState('');
   const [description, setDescription] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError]           = useState('');
+  const queryClient = useQueryClient();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    try {
-      await onCreate(name, description);
-      onClose();
-    } catch {
-      setError('Failed to create team');
-      setLoading(false);
-    }
-  };
+  const createMutation = useMutation({
+    mutationFn: () => teamService.create(name, description),
+    onSuccess:  () => { queryClient.invalidateQueries({ queryKey: queryKeys.teams() }); onClose(); },
+    onError:    () => setError('Failed to create team'),
+  });
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>Create New Team</h3>
-          <button className="modal-close" onClick={onClose}>×</button>
-        </div>
-        <div className="modal-body">
-          {error && <div className="alert alert-error">{error}</div>}
-          <form onSubmit={handleSubmit}>
-            <div className="input-group">
-              <label>Team name *</label>
-              <input
-                type="text" value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="e.g. Frontend Team" autoFocus required
-              />
-            </div>
-            <div className="input-group">
-              <label>Description</label>
-              <textarea
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                placeholder="What does this team work on?"
-                rows={3} style={{ resize: 'vertical' }}
-              />
-            </div>
-            <div className="modal-footer">
-              <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
-              <button type="submit" className="btn btn-primary" disabled={loading}>
-                {loading ? <><span className="spinner spinner-white" /> Creating…</> : 'Create Team'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+    <Modal onClose={onClose}>
+      <ModalHeader title="Create New Team" onClose={onClose} />
+      <ModalBody>
+        {error && <div className="alert alert-error">{error}</div>}
+        <form id="create-team-form" onSubmit={e => { e.preventDefault(); setError(''); createMutation.mutate(); }}>
+          <div className="input-group">
+            <label>Team name *</label>
+            <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Frontend Team" autoFocus required />
+          </div>
+          <div className="input-group">
+            <label>Description</label>
+            <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="What does this team work on?" rows={3} style={{ resize: 'vertical' }} />
+          </div>
+        </form>
+      </ModalBody>
+      <ModalFooter>
+        <Button variant="secondary" onClick={onClose}>Cancel</Button>
+        <Button type="submit" form="create-team-form" loading={createMutation.isPending}>
+          {createMutation.isPending ? 'Creating…' : 'Create Team'}
+        </Button>
+      </ModalFooter>
+    </Modal>
   );
 }
 
-function InviteModal({ team, onClose, onInvite }) {
-  const [email, setEmail] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+// ─── InviteModal ──────────────────────────────────────────────────────────────
+function InviteModal({ team, onClose }) {
+  const [email, setEmail]     = useState('');
   const [success, setSuccess] = useState('');
+  const [error, setError]     = useState('');
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    setSuccess('');
-    try {
-      await onInvite(team.id, email);
-      setSuccess(`Invitation email sent to ${email}`);
-      setEmail('');
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to send invitation');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const inviteMutation = useMutation({
+    mutationFn: (addr) => teamService.invite(team.id, addr),
+    onSuccess:  (_, addr) => { setSuccess(`Invitation sent to ${addr}`); setEmail(''); setError(''); },
+    onError:    (err)     => { setError(err.response?.data?.error || 'Failed to send invitation'); setSuccess(''); },
+  });
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>Invite to {team.name}</h3>
-          <button className="modal-close" onClick={onClose}>×</button>
-        </div>
-        <div className="modal-body">
-          {error   && <div className="alert alert-error">{error}</div>}
-          {success && <div className="alert alert-success">{success}</div>}
-          <form onSubmit={handleSubmit}>
-            <div className="input-group">
-              <label>Email address *</label>
-              <input
-                type="email" value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="teammate@company.com" autoFocus required
-              />
-            </div>
-            <p className="invite-hint">They'll receive an email with a link to accept and set up their account.</p>
-            <div className="modal-footer">
-              <button type="button" className="btn btn-secondary" onClick={onClose}>Close</button>
-              <button type="submit" className="btn btn-primary" disabled={loading}>
-                {loading ? <><span className="spinner spinner-white" /> Inviting…</> : 'Send Invite'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+    <Modal onClose={onClose}>
+      <ModalHeader title={`Invite to ${team.name}`} onClose={onClose} />
+      <ModalBody>
+        {error   && <div className="alert alert-error">{error}</div>}
+        {success && <div className="alert alert-success">{success}</div>}
+        <form id="invite-form" onSubmit={e => { e.preventDefault(); inviteMutation.mutate(email.trim()); }}>
+          <div className="input-group">
+            <label>Email address *</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="teammate@company.com" autoFocus required />
+          </div>
+          <p className="invite-hint">They'll receive an email with a link to accept and set up their account.</p>
+        </form>
+      </ModalBody>
+      <ModalFooter>
+        <Button variant="secondary" onClick={onClose}>Close</Button>
+        <Button type="submit" form="invite-form" loading={inviteMutation.isPending}>
+          {inviteMutation.isPending ? 'Inviting…' : 'Send Invite'}
+        </Button>
+      </ModalFooter>
+    </Modal>
   );
 }
 
+// ─── Teams page ───────────────────────────────────────────────────────────────
 function Teams() {
   const { user } = useAuth();
-  const [teams, setTeams]               = useState([]);
-  const [loading, setLoading]           = useState(true);
-  const [error, setError]               = useState('');
   const [search, setSearch]             = useState('');
   const [showCreate, setShowCreate]     = useState(false);
   const [inviteTarget, setInviteTarget] = useState(null);
   const [activeNav, setActiveNav]       = useState('teams');
   const [selectedTeam, setSelectedTeam] = useState(null);
+  const queryClient = useQueryClient();
+  const debouncedSearch = useDebounce(search);
 
-  useEffect(() => { fetchTeams({ showLoading: true }); }, []);
+  const { data: teams = [], isLoading, error } = useQuery({
+    queryKey: queryKeys.teams(),
+    queryFn:  () => teamService.getAll().then(r => r.data),
+  });
 
-  const fetchTeams = async ({ showLoading = false, keepSelectedId = null } = {}) => {
-    try {
-      if (showLoading) setLoading(true);
-      const res = await teamService.getAll();
-      setTeams(res.data);
-      if (keepSelectedId) {
-        const updated = res.data.find(t => t.id === keepSelectedId);
-        setSelectedTeam(updated || null);
-      }
-    } catch {
-      setError('Failed to load teams');
-    } finally {
-      if (showLoading) setLoading(false);
-    }
-  };
-
-  const handleCreate = async (name, description) => {
-    await teamService.create(name, description);
-    await fetchTeams();
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this team? This cannot be undone.')) return;
-    try {
-      await teamService.delete(id);
+  const deleteMutation = useMutation({
+    mutationFn: (id) => teamService.delete(id),
+    onSuccess:  (_, id) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.teams() });
       if (selectedTeam?.id === id) setSelectedTeam(null);
-      fetchTeams();
-    } catch {
-      setError('Failed to delete team');
-    }
-  };
+    },
+    onError: () => alert('Failed to delete team'),
+  });
 
-  const handleInvite = async (teamId, email) => {
-    await teamService.invite(teamId, email);
-  };
+  const removeMemberMutation = useMutation({
+    mutationFn: ({ teamId, userId }) => teamService.removeMember(teamId, userId),
+    onSuccess:  (_, { teamId, isSelf }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.teams() }).then(() => {
+        if (isSelf) {
+          setSelectedTeam(null);
+        } else {
+          const updated = queryClient.getQueryData(queryKeys.teams())?.find(t => t.id === teamId);
+          if (updated) setSelectedTeam(updated);
+        }
+      });
+    },
+    onError: (err) => alert(err.response?.data?.error || 'Failed to update team membership'),
+  });
 
-  const handleRemoveMember = async (teamId, userId, isSelf) => {
+  const handleDelete = useCallback((id) => {
+    if (!window.confirm('Delete this team? This cannot be undone.')) return;
+    deleteMutation.mutate(id);
+  }, [deleteMutation.mutate]);
+
+  const handleRemoveMember = useCallback((teamId, userId, isSelf) => {
     const msg = isSelf ? 'Leave this team?' : 'Remove this member from the team?';
     if (!window.confirm(msg)) return;
-    try {
-      await teamService.removeMember(teamId, userId);
-      if (isSelf) {
-        setSelectedTeam(null);
-        await fetchTeams();
-      } else {
-        await fetchTeams({ keepSelectedId: teamId });
-      }
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to update team membership');
-    }
-  };
+    removeMemberMutation.mutate({ teamId, userId, isSelf });
+  }, [removeMemberMutation.mutate]);
 
-  const filtered = teams.filter(t =>
-    t.name.toLowerCase().includes(search.toLowerCase())
+  const filtered = useMemo(() =>
+    debouncedSearch
+      ? teams.filter(t => t.name.toLowerCase().includes(debouncedSearch.toLowerCase()))
+      : teams,
+    [teams, debouncedSearch]
+  );
+
+  const totalMembers = useMemo(() =>
+    teams.reduce((s, t) => s + (t.members?.length || 0), 0),
+    [teams]
   );
 
   return (
     <div className="teams-page">
-      {/* Secondary sidebar */}
       <div className="teams-subnav">
         <div className="subnav-label">Manage</div>
-        <button
-          className={`subnav-item${activeNav === 'teams' ? ' active' : ''}`}
-          onClick={() => { setActiveNav('teams'); setSelectedTeam(null); }}
-        >
+        <button className={`subnav-item${activeNav === 'teams' ? ' active' : ''}`}
+          onClick={() => { setActiveNav('teams'); setSelectedTeam(null); }}>
           <IconTeams /> Teams
         </button>
-        <button
-          className={`subnav-item${activeNav === 'notifications' ? ' active' : ''}`}
-          onClick={() => { setActiveNav('notifications'); setSelectedTeam(null); }}
-        >
+        <button className={`subnav-item${activeNav === 'notifications' ? ' active' : ''}`}
+          onClick={() => { setActiveNav('notifications'); setSelectedTeam(null); }}>
           <IconBell /> Notifications
         </button>
       </div>
 
       <div className="teams-main-content">
-        {/* Page header — hide when inside a team detail */}
         {!selectedTeam && (
           <>
-            <div className="page-header">
-              <div className="page-header-text">
-                <h1>{activeNav === 'teams' ? 'Teams' : 'Notifications'}</h1>
-                <p>{activeNav === 'teams'
+            <PageHeader
+              title={activeNav === 'teams' ? 'Teams' : 'Notifications'}
+              subtitle={
+                activeNav === 'teams'
                   ? 'Collaborate by creating teams and inviting members.'
                   : 'Stay up to date with your team activity.'
-                }</p>
-              </div>
-              {activeNav === 'teams' && (
-                <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-                  + New Team
-                </button>
-              )}
-            </div>
+              }
+              action={
+                activeNav === 'teams'
+                  ? <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ New Team</button>
+                  : null
+              }
+            />
 
             {activeNav === 'teams' && (
-              <div className="stats-strip">
-                <div className="stat-pill">
-                  <div className="stat-pill-icon indigo">👥</div>
-                  <div>
-                    <div className="stat-pill-val">{teams.length}</div>
-                    <div className="stat-pill-label">Total Teams</div>
-                  </div>
-                </div>
-                <div className="stat-pill">
-                  <div className="stat-pill-icon green">👤</div>
-                  <div>
-                    <div className="stat-pill-val">
-                      {teams.reduce((s, t) => s + (t.members?.length || 0), 0)}
-                    </div>
-                    <div className="stat-pill-label">Total Members</div>
-                  </div>
-                </div>
-              </div>
+              <StatStrip stats={[
+                { icon: '👥', val: teams.length,  label: 'Total Teams'   },
+                { icon: '👤', val: totalMembers,  label: 'Total Members', iconClass: 'green' },
+              ]} />
             )}
           </>
         )}
 
-        {error && <div className="alert alert-error">{error}</div>}
+        {error && <div className="alert alert-error">Failed to load teams</div>}
 
         {activeNav === 'teams' && (
           <>
@@ -450,49 +356,25 @@ function Teams() {
               />
             ) : (
               <>
-                {/* Toolbar */}
                 <div className="teams-toolbar">
-                  <div className="teams-search">
-                    <IconSearch />
-                    <input
-                      type="text"
-                      placeholder="Search teams…"
-                      value={search}
-                      onChange={e => setSearch(e.target.value)}
-                    />
-                  </div>
-                  <span className="teams-count">
-                    {filtered.length} team{filtered.length !== 1 ? 's' : ''}
-                  </span>
+                  <SearchInput value={search} onChange={e => setSearch(e.target.value)} placeholder="Search teams…" />
+                  <span className="teams-count">{filtered.length} team{filtered.length !== 1 ? 's' : ''}</span>
                 </div>
 
-                {/* Grid */}
-                {loading ? (
-                  <div style={{ textAlign: 'center', padding: '60px' }}>
-                    <div className="spinner spinner-lg" />
-                  </div>
+                {isLoading ? (
+                  <PageLoader />
                 ) : filtered.length === 0 ? (
-                  <div className="empty-state">
-                    <div className="empty-state-icon">👥</div>
-                    <h3>{search ? 'No teams match your search' : 'No teams yet'}</h3>
-                    <p>{search ? 'Try a different search.' : 'Create your first team to collaborate with others.'}</p>
-                    {!search && (
-                      <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-                        + New Team
-                      </button>
-                    )}
-                  </div>
+                  <EmptyState
+                    icon="👥"
+                    title={search ? 'No teams match your search' : 'No teams yet'}
+                    description={search ? 'Try a different search.' : 'Create your first team to collaborate with others.'}
+                    action={!search ? <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ New Team</button> : null}
+                  />
                 ) : (
                   <div className="teams-grid">
                     {filtered.map(t => (
-                      <TeamCard
-                        key={t.id}
-                        team={t}
-                        currentUser={user}
-                        onDelete={handleDelete}
-                        onInvite={setInviteTarget}
-                        onSelect={setSelectedTeam}
-                      />
+                      <TeamCard key={t.id} team={t} currentUser={user}
+                        onDelete={handleDelete} onInvite={setInviteTarget} onSelect={setSelectedTeam} />
                     ))}
                   </div>
                 )}
@@ -502,28 +384,12 @@ function Teams() {
         )}
 
         {activeNav === 'notifications' && (
-          <div className="empty-state">
-            <div className="empty-state-icon">🔔</div>
-            <h3>No notifications</h3>
-            <p>You're all caught up! Check back later for team activity updates.</p>
-          </div>
+          <EmptyState icon="🔔" title="No notifications" description="You're all caught up! Check back later for team activity updates." />
         )}
       </div>
 
-      {showCreate && (
-        <CreateTeamModal
-          onClose={() => setShowCreate(false)}
-          onCreate={handleCreate}
-        />
-      )}
-
-      {inviteTarget && (
-        <InviteModal
-          team={inviteTarget}
-          onClose={() => setInviteTarget(null)}
-          onInvite={handleInvite}
-        />
-      )}
+      {showCreate   && <CreateTeamModal onClose={() => setShowCreate(false)} />}
+      {inviteTarget && <InviteModal team={inviteTarget} onClose={() => setInviteTarget(null)} />}
     </div>
   );
 }

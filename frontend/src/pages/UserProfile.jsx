@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useMutation } from '@tanstack/react-query';
 import { authService } from '../services/api';
+import Button from '../components/ui/Button';
+import { getInitials } from '../utils/helpers';
 import '../styles/profile.css';
 
 const AVATARS = ['🧑‍💻','👩‍💻','🧑‍🎨','👨‍🎨','🧑‍🔬','👩‍🔬','🧑‍🚀','👨‍🚀','🦸','🦹'];
@@ -22,13 +25,8 @@ const IconSub = () => (
   </svg>
 );
 
-function getInitials(name) {
-  if (!name) return '?';
-  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-}
-
 function UserProfile() {
-  const { user, login } = useAuth();
+  const { user, updateUser } = useAuth();
   const [activeNav, setActiveNav]         = useState('profile');
   const [firstName, setFirstName]         = useState('');
   const [lastName, setLastName]           = useState('');
@@ -36,8 +34,6 @@ function UserProfile() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword]         = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [saving, setSaving]       = useState(false);
-  const [savingPw, setSavingPw]   = useState(false);
   const [message, setMessage]     = useState('');
   const [pwMessage, setPwMessage] = useState('');
   const [error, setError]         = useState('');
@@ -53,48 +49,48 @@ function UserProfile() {
     if (user?.avatar_url) setSelectedAvatar(user.avatar_url);
   }, [user]);
 
-  const handleSave = async (e) => {
-    e.preventDefault();
-    setError('');
-    setMessage('');
-    setSaving(true);
-    try {
-      const fullName = `${firstName} ${lastName}`.trim();
-      const res = await authService.updateProfile({ name: fullName, avatar_url: selectedAvatar });
-      const updatedUser = { ...user, ...res.data.user };
-      login(updatedUser, localStorage.getItem('token'));
+  const updateProfileMutation = useMutation({
+    mutationFn: ({ name, avatar_url }) => authService.updateProfile({ name, avatar_url }),
+    onSuccess: (res) => {
+      updateUser({ ...user, ...res.data.user });
       setMessage('Profile updated successfully!');
-    } catch {
+      setError('');
+    },
+    onError: () => {
       setError('Failed to update profile. Please try again.');
-    } finally {
-      setSaving(false);
-    }
-  };
+      setMessage('');
+    },
+  });
 
-  const handleChangePassword = async (e) => {
-    e.preventDefault();
-    setPwError('');
-    setPwMessage('');
-    if (newPassword.length < 6) {
-      setPwError('New password must be at least 6 characters.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setPwError('Passwords do not match.');
-      return;
-    }
-    setSavingPw(true);
-    try {
-      await authService.changePassword(currentPassword, newPassword);
+  const changePasswordMutation = useMutation({
+    mutationFn: ({ currentPassword, newPassword }) =>
+      authService.changePassword(currentPassword, newPassword),
+    onSuccess: () => {
       setPwMessage('Password changed successfully!');
+      setPwError('');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-    } catch (err) {
+    },
+    onError: (err) => {
       setPwError(err.response?.data?.error || 'Failed to change password.');
-    } finally {
-      setSavingPw(false);
-    }
+      setPwMessage('');
+    },
+  });
+
+  const handleSave = (e) => {
+    e.preventDefault();
+    const fullName = `${firstName} ${lastName}`.trim();
+    updateProfileMutation.mutate({ name: fullName, avatar_url: selectedAvatar });
+  };
+
+  const handleChangePassword = (e) => {
+    e.preventDefault();
+    setPwError('');
+    setPwMessage('');
+    if (newPassword.length < 6) { setPwError('New password must be at least 6 characters.'); return; }
+    if (newPassword !== confirmPassword) { setPwError('Passwords do not match.'); return; }
+    changePasswordMutation.mutate({ currentPassword, newPassword });
   };
 
   return (
@@ -220,13 +216,9 @@ function UserProfile() {
                     </select>
                   </div>
 
-                  <button
-                    type="submit"
-                    className="btn btn-primary profile-save-btn"
-                    disabled={saving}
-                  >
-                    {saving ? <><span className="spinner spinner-white" /> Saving…</> : 'Save Changes'}
-                  </button>
+                  <Button type="submit" className="profile-save-btn" loading={updateProfileMutation.isPending}>
+                    {updateProfileMutation.isPending ? 'Saving…' : 'Save Changes'}
+                  </Button>
                 </div>
               </div>
             </form>
@@ -277,9 +269,9 @@ function UserProfile() {
                       />
                     </div>
                   </div>
-                  <button type="submit" className="btn btn-primary" disabled={savingPw}>
-                    {savingPw ? <><span className="spinner spinner-white" /> Updating…</> : 'Update Password'}
-                  </button>
+                  <Button type="submit" loading={changePasswordMutation.isPending}>
+                    {changePasswordMutation.isPending ? 'Updating…' : 'Update Password'}
+                  </Button>
                 </div>
               </form>
             </div>

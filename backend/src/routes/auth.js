@@ -1,35 +1,48 @@
 import express from 'express';
 import User from '../models/User.js';
-import { generateToken, verifyToken } from '../middleware/auth.js';
+import {
+  generateAccessToken,
+  generateRefreshToken,
+  verifyToken,
+  verifyRefreshToken,
+  setRefreshCookie,
+  clearRefreshCookie,
+  REFRESH_COOKIE,
+} from '../middleware/auth.js';
 import { sendPasswordResetEmail } from '../services/email.js';
 
 const router = express.Router();
 
-// Signup
+/** Shared helper — build the public user shape returned in every auth response. */
+const publicUser = (user) => ({
+  id:         user.id,
+  email:      user.email,
+  name:       user.name,
+  avatar_url: user.avatar_url ?? null,
+});
+
+// ─── Signup ───────────────────────────────────────────────────────────────────
 router.post('/signup', async (req, res) => {
   try {
     const { email, password, name } = req.body;
-
     if (!email || !password || !name) {
       return res.status(400).json({ error: 'Email, password, and name are required' });
     }
 
-    const existingUser = await User.findByEmail(email);
-    if (existingUser) {
+    if (await User.findByEmail(email)) {
       return res.status(409).json({ error: 'User already exists' });
     }
 
-    const user = await User.create(email, password, name);
-    const token = generateToken(user.id, user.email);
+    const user         = await User.create(email, password, name);
+    const accessToken  = generateAccessToken(user.id, user.email);
+    const refreshToken = generateRefreshToken(user.id, user.email);
+
+    setRefreshCookie(res, refreshToken);
 
     res.status(201).json({
-      message: 'User created successfully',
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-      },
-      token,
+      message:     'User created successfully',
+      user:        publicUser(user),
+      accessToken,
     });
   } catch (error) {
     console.error('Signup error:', error);
@@ -37,35 +50,28 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-// Login
+// ─── Login ────────────────────────────────────────────────────────────────────
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
     const user = await User.findByEmail(email);
-    if (!user) {
+    if (!user || !(await User.validatePassword(password, user.password))) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const isPasswordValid = await User.validatePassword(password, user.password);
-    if (!isPasswordValid) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
+    const accessToken  = generateAccessToken(user.id, user.email);
+    const refreshToken = generateRefreshToken(user.id, user.email);
 
-    const token = generateToken(user.id, user.email);
+    setRefreshCookie(res, refreshToken);
 
     res.json({
-      message: 'Login successful',
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-      },
-      token,
+      message:     'Login successful',
+      user:        publicUser(user),
+      accessToken,
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -73,7 +79,45 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Get current user profile
+// ─── Refresh ──────────────────────────────────────────────────────────────────
+// Reads the HttpOnly refresh cookie, validates it, and issues a new access token.
+// The refresh cookie is rotated on every call (refresh token rotation).
+router.post('/refresh', async (req, res) => {
+  const token = req.cookies[REFRESH_COOKIE];
+  if (!token) {
+    return res.status(401).json({ error: 'No refresh token' });
+  }
+
+  try {
+    const decoded = verifyRefreshToken(token);
+    const user    = await User.findById(decoded.id);
+    if (!user) {
+      clearRefreshCookie(res);
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    const accessToken     = generateAccessToken(user.id, user.email);
+    const newRefreshToken = generateRefreshToken(user.id, user.email);
+
+    setRefreshCookie(res, newRefreshToken); // rotate
+
+    res.json({
+      accessToken,
+      user: publicUser(user),
+    });
+  } catch {
+    clearRefreshCookie(res);
+    res.status(401).json({ error: 'Invalid or expired refresh token' });
+  }
+});
+
+// ─── Logout ───────────────────────────────────────────────────────────────────
+router.post('/logout', (req, res) => {
+  clearRefreshCookie(res);
+  res.json({ message: 'Logged out successfully' });
+});
+
+// ─── Get profile ──────────────────────────────────────────────────────────────
 router.get('/profile', verifyToken, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
@@ -85,7 +129,7 @@ router.get('/profile', verifyToken, async (req, res) => {
   }
 });
 
-// Update profile
+// ─── Update profile ───────────────────────────────────────────────────────────
 router.patch('/profile', verifyToken, async (req, res) => {
   try {
     const { name, avatar_url } = req.body;
@@ -97,7 +141,7 @@ router.patch('/profile', verifyToken, async (req, res) => {
   }
 });
 
-// Change password (authenticated)
+// ─── Change password ──────────────────────────────────────────────────────────
 router.post('/change-password', verifyToken, async (req, res) => {
   try {
     const { current_password, new_password } = req.body;
@@ -109,7 +153,7 @@ router.post('/change-password', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'New password must be at least 6 characters' });
     }
 
-    const user = await User.findByEmail(req.user.email);
+    const user  = await User.findByEmail(req.user.email);
     const valid = await User.validatePassword(current_password, user.password);
     if (!valid) {
       return res.status(401).json({ error: 'Current password is incorrect' });
@@ -123,13 +167,11 @@ router.post('/change-password', verifyToken, async (req, res) => {
   }
 });
 
-// Forgot password — send reset email
+// ─── Forgot password ──────────────────────────────────────────────────────────
 router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) {
-      return res.status(400).json({ error: 'Email is required' });
-    }
+    if (!email) return res.status(400).json({ error: 'Email is required' });
 
     const user = await User.findByEmail(email);
     if (!user) {
@@ -138,7 +180,7 @@ router.post('/forgot-password', async (req, res) => {
       });
     }
 
-    const token = await User.createPasswordResetToken(user.id);
+    const token    = await User.createPasswordResetToken(user.id);
     const resetUrl = `${process.env.APP_URL || 'http://localhost:3000'}/reset-password?token=${token}`;
     await sendPasswordResetEmail({ to: user.email, name: user.name, resetUrl });
 
@@ -149,7 +191,7 @@ router.post('/forgot-password', async (req, res) => {
   }
 });
 
-// Reset password — consume token
+// ─── Reset password ───────────────────────────────────────────────────────────
 router.post('/reset-password', async (req, res) => {
   try {
     const { token, new_password } = req.body;

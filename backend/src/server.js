@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -47,6 +48,7 @@ const corsOptions = {
 // Middleware — cors must be first so OPTIONS preflight requests are handled before json()
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions)); // explicit preflight handler for all routes
+app.use(cookieParser());
 app.use(express.json());
 
 // Initialize database tables

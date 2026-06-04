@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectService, knowledgeBaseService } from '../services/api';
+import { queryKeys } from '../lib/queryKeys';
 import '../styles/knowledge-base.css';
 
 const SOURCES = [
@@ -78,7 +80,6 @@ const IconBack = () => (
   </svg>
 );
 
-/* ── Empty state ── */
 function EmptyState() {
   return (
     <div className="kb-empty">
@@ -94,7 +95,6 @@ function EmptyState() {
   );
 }
 
-/* ── Integration connect screen ── */
 function IntegrationConnect({ item }) {
   return (
     <div className="kb-integration">
@@ -116,93 +116,82 @@ function IntegrationConnect({ item }) {
   );
 }
 
-/* ── Main component ── */
 function KnowledgeBase() {
   const { projectId } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  const [project, setProject]             = useState(null);
-  const [loading, setLoading]             = useState(true);
-  const [expandedSections, setExpanded]   = useState({ requirements: true, project_management: false, designs: false });
-  const [selected, setSelected]           = useState({ sectionId: 'requirements', item: SOURCES[0].items[0] });
-  const [docs, setDocs]                   = useState([]);
-  const [docsLoading, setDocsLoading]     = useState(false);
-  const [showForm, setShowForm]           = useState(false);
-  const [form, setForm]                   = useState({ title: '', url: '', content: '' });
-  const [error, setError]                 = useState('');
-  const [submitting, setSubmitting]       = useState(false);
+  const [expandedSections, setExpanded] = useState({ requirements: true, project_management: false, designs: false });
+  const [selected, setSelected]         = useState({ sectionId: 'requirements', item: SOURCES[0].items[0] });
+  const [showForm, setShowForm]         = useState(false);
+  const [form, setForm]                 = useState({ title: '', url: '', content: '' });
+  const [formError, setFormError]       = useState('');
 
-  useEffect(() => {
-    projectService.getById(projectId)
-      .then(r => setProject(r.data))
-      .catch(() => setError('Failed to load project'))
-      .finally(() => setLoading(false));
-  }, [projectId]);
+  const type = selected?.item?.type;
+  const isDocType = type === 'link' || type === 'document';
 
-  useEffect(() => {
-    if (selected?.item?.type === 'link' || selected?.item?.type === 'document') {
-      fetchDocs();
-    } else {
-      setDocs([]);
-    }
-  }, [selected]);
+  const { data: project, isLoading: projectLoading } = useQuery({
+    queryKey: queryKeys.project(projectId),
+    queryFn: () => projectService.getById(projectId).then(r => r.data),
+  });
 
-  const fetchDocs = async () => {
-    setDocsLoading(true);
-    try {
-      const res = await knowledgeBaseService.getAll(projectId, selected.sectionId, selected.item.id);
-      setDocs(res.data);
-    } catch {
-      setDocs([]);
-    } finally {
-      setDocsLoading(false);
-    }
-  };
+  const kbQueryKey = queryKeys.knowledgeBase(projectId, selected?.sectionId, selected?.item?.id);
+
+  const { data: docs = [], isLoading: docsLoading } = useQuery({
+    queryKey: kbQueryKey,
+    queryFn: () => knowledgeBaseService.getAll(projectId, selected.sectionId, selected.item.id).then(r => r.data),
+    enabled: isDocType,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data) => knowledgeBaseService.create(projectId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: kbQueryKey });
+      setForm({ title: '', url: '', content: '' });
+      setShowForm(false);
+      setFormError('');
+    },
+    onError: () => setFormError('Failed to save. Please try again.'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (docId) => knowledgeBaseService.delete(projectId, docId),
+    onSuccess: (_, docId) => {
+      queryClient.setQueryData(kbQueryKey, old => old?.filter(d => d.id !== docId) ?? []);
+    },
+    onError: () => alert('Failed to delete.'),
+  });
 
   const handleSelect = (sectionId, item) => {
     setSelected({ sectionId, item });
     setShowForm(false);
     setForm({ title: '', url: '', content: '' });
-    setError('');
+    setFormError('');
   };
 
   const handleToggleSection = (id) =>
     setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.title.trim()) return;
-    setSubmitting(true);
-    try {
-      await knowledgeBaseService.create(projectId, {
-        category:    selected.sectionId,
-        subcategory: selected.item.id,
-        title:       form.title.trim(),
-        url:         form.url.trim() || null,
-        content:     form.content.trim() || null,
-        doc_type:    selected.item.type,
-      });
-      setForm({ title: '', url: '', content: '' });
-      setShowForm(false);
-      fetchDocs();
-    } catch {
-      setError('Failed to save. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
+    setFormError('');
+    createMutation.mutate({
+      category:    selected.sectionId,
+      subcategory: selected.item.id,
+      title:       form.title.trim(),
+      url:         form.url.trim() || null,
+      content:     form.content.trim() || null,
+      doc_type:    selected.item.type,
+    });
   };
 
-  const handleDelete = async (docId) => {
+  const handleDelete = (docId) => {
     if (!window.confirm('Delete this entry?')) return;
-    try {
-      await knowledgeBaseService.delete(projectId, docId);
-      fetchDocs();
-    } catch {
-      setError('Failed to delete.');
-    }
+    deleteMutation.mutate(docId);
   };
 
-  if (loading) {
+  if (projectLoading) {
     return (
       <div className="page-wrapper" style={{ textAlign: 'center', padding: '60px' }}>
         <div className="spinner spinner-lg" />
@@ -211,7 +200,6 @@ function KnowledgeBase() {
   }
 
   const currentSection = SOURCES.find(s => s.id === selected?.sectionId);
-  const type = selected?.item?.type;
 
   return (
     <div className="page-wrapper kb-page">
@@ -269,7 +257,7 @@ function KnowledgeBase() {
                 onClick={() => handleToggleSection(section.id)}
               >
                 <span className="kb-section-icon-wrap">
-                  {section.id === 'requirements'      && <svg viewBox="0 0 16 16" fill="none" style={{width:14,height:14}}><rect x="1" y="1" width="14" height="14" rx="3" fill="#6366f122"/><line x1="4" y1="5" x2="12" y2="5" stroke="#6366f1" strokeWidth="1.5" strokeLinecap="round"/><line x1="4" y1="8" x2="10" y2="8" stroke="#6366f1" strokeWidth="1.5" strokeLinecap="round"/><line x1="4" y1="11" x2="11" y2="11" stroke="#6366f1" strokeWidth="1.5" strokeLinecap="round"/></svg>}
+                  {section.id === 'requirements'       && <svg viewBox="0 0 16 16" fill="none" style={{width:14,height:14}}><rect x="1" y="1" width="14" height="14" rx="3" fill="#6366f122"/><line x1="4" y1="5" x2="12" y2="5" stroke="#6366f1" strokeWidth="1.5" strokeLinecap="round"/><line x1="4" y1="8" x2="10" y2="8" stroke="#6366f1" strokeWidth="1.5" strokeLinecap="round"/><line x1="4" y1="11" x2="11" y2="11" stroke="#6366f1" strokeWidth="1.5" strokeLinecap="round"/></svg>}
                   {section.id === 'project_management' && <svg viewBox="0 0 16 16" fill="none" style={{width:14,height:14}}><path d="M14 13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3l1.5 2H13a1 1 0 0 1 1 1v6z" fill="#0d9488" opacity=".2" stroke="#0d9488" strokeWidth="1.2"/></svg>}
                   {section.id === 'designs'            && <svg viewBox="0 0 16 16" fill="none" style={{width:14,height:14}}><circle cx="8" cy="8" r="6" fill="#f9a8d422" stroke="#ec4899" strokeWidth="1.2"/><circle cx="8" cy="8" r="2.5" fill="#ec4899"/></svg>}
                 </span>
@@ -299,7 +287,6 @@ function KnowledgeBase() {
         <div className="kb-content-panel">
           {selected && (
             <>
-              {/* Content header */}
               <div className="kb-content-header">
                 <div className="kb-breadcrumb">
                   <IconFolder />
@@ -320,13 +307,11 @@ function KnowledgeBase() {
                 )}
               </div>
 
-              {error && <div className="alert alert-error" style={{ margin: '12px 0' }}>{error}</div>}
+              {formError && <div className="alert alert-error" style={{ margin: '12px 0' }}>{formError}</div>}
 
-              {/* Integration view */}
               {type === 'integration' && <IntegrationConnect item={selected.item} />}
 
-              {/* Link / Document view */}
-              {(type === 'link' || type === 'document') && (
+              {isDocType && (
                 <div className="kb-content-body">
                   {showForm && (
                     <div className="card kb-form-card">
@@ -368,8 +353,8 @@ function KnowledgeBase() {
                         )}
 
                         <div className="form-actions">
-                          <button type="submit" className="btn btn-primary" disabled={submitting}>
-                            {submitting ? 'Saving…' : 'Save'}
+                          <button type="submit" className="btn btn-primary" disabled={createMutation.isPending}>
+                            {createMutation.isPending ? 'Saving…' : 'Save'}
                           </button>
                           <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>
                             Cancel
@@ -392,12 +377,7 @@ function KnowledgeBase() {
                           <div className="kb-doc-main">
                             <div className="kb-doc-title">{doc.title}</div>
                             {doc.url && (
-                              <a
-                                className="kb-doc-url"
-                                href={doc.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
+                              <a className="kb-doc-url" href={doc.url} target="_blank" rel="noopener noreferrer">
                                 <IconLink /> {doc.url}
                               </a>
                             )}

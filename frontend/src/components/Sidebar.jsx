@@ -1,7 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useClickOutside } from '../hooks/useClickOutside';
+import { getInitials } from '../utils/helpers';
 import '../styles/sidebar.css';
 
 const IconApps = () => (
@@ -67,29 +69,15 @@ const IconLogout = () => (
   </svg>
 );
 
-function getInitials(name) {
-  if (!name) return '?';
-  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-}
-
 function Sidebar({ onWhatNew, isOpen, onClose }) {
   const { user, logout } = useAuth();
   const { theme, toggle: toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [showPopup, setShowPopup] = useState(false);
   const popupRef = useRef(null);
-  const userRef = useRef(null);
+  const userRef  = useRef(null);
 
-  useEffect(() => {
-    function handle(e) {
-      if (
-        popupRef.current  && !popupRef.current.contains(e.target) &&
-        userRef.current   && !userRef.current.contains(e.target)
-      ) setShowPopup(false);
-    }
-    document.addEventListener('mousedown', handle);
-    return () => document.removeEventListener('mousedown', handle);
-  }, []);
+  useClickOutside([popupRef, userRef], () => setShowPopup(false));
 
   const handleLogout = () => {
     logout();
@@ -102,22 +90,18 @@ function Sidebar({ onWhatNew, isOpen, onClose }) {
 
   return (
     <aside className={`sidebar${isOpen ? ' sidebar-open' : ''}`}>
-      {/* Brand */}
       <NavLink to="/apps" className="sidebar-brand" onClick={nav}>
         <div className="sidebar-brand-icon">🐛</div>
         <span className="sidebar-brand-name">Bugme</span>
       </NavLink>
 
-      {/* Main nav */}
       <nav className="sidebar-nav">
         <span className="sidebar-section-label">Workspace</span>
 
         <NavLink
-          to="/apps"
-          end
+          to="/apps" end
           className={({ isActive }) => `sidebar-item${isActive ? ' active' : ''}`}
-          data-tip="Projects"
-          onClick={nav}
+          data-tip="Projects" onClick={nav}
         >
           <IconApps />
           <span className="sidebar-item-text">Projects</span>
@@ -126,15 +110,13 @@ function Sidebar({ onWhatNew, isOpen, onClose }) {
         <NavLink
           to="/teams"
           className={({ isActive }) => `sidebar-item${isActive ? ' active' : ''}`}
-          data-tip="Teams"
-          onClick={nav}
+          data-tip="Teams" onClick={nav}
         >
           <IconTeams />
           <span className="sidebar-item-text">Teams</span>
         </NavLink>
       </nav>
 
-      {/* Bottom */}
       <div className="sidebar-bottom">
         <button
           className="sidebar-item"
@@ -145,22 +127,13 @@ function Sidebar({ onWhatNew, isOpen, onClose }) {
           <span className="sidebar-item-text">What's New</span>
         </button>
 
-        <button
-          className="theme-toggle"
-          data-tip={theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
-          onClick={toggleTheme}
-        >
+        <button className="theme-toggle" onClick={toggleTheme} data-tip={theme === 'dark' ? 'Light Mode' : 'Dark Mode'}>
           {theme === 'dark' ? <IconSun /> : <IconMoon />}
           <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
         </button>
 
-        {/* User */}
         <div style={{ position: 'relative' }}>
-          <button
-            ref={userRef}
-            className="sidebar-user"
-            onClick={() => setShowPopup(v => !v)}
-          >
+          <button ref={userRef} className="sidebar-user" onClick={() => setShowPopup(v => !v)}>
             <div className="sidebar-avatar">{getInitials(user?.name)}</div>
             <div className="sidebar-user-info">
               <div className="sidebar-user-name">{user?.name}</div>

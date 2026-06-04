@@ -1,11 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { issueService } from '../services/api';
+import { queryKeys } from '../lib/queryKeys';
 import Avatar from './ui/Avatar';
 import {
   STATUS_CONFIG, PRIORITY_CONFIG, TYPE_CONFIG,
   ISSUE_STATUSES, ISSUE_PRIORITIES, ISSUE_SEVERITIES, ISSUE_TYPES,
 } from '../utils/constants';
-import { formatDate, formatTime } from '../utils/helpers';
+import { formatDateTime } from '../utils/helpers';
 import '../styles/issue-drawer.css';
 
 function TagInput({ tags, onChange }) {
@@ -44,70 +46,62 @@ export default function IssueDrawer({ issue: initialIssue, projectId, onClose, o
   const [title, setTitle]           = useState(initialIssue.title);
   const [desc, setDesc]             = useState(initialIssue.description || '');
   const [tags, setTags]             = useState(initialIssue.tags || []);
-  const [saving, setSaving]         = useState(false);
-  const [comments, setComments]     = useState([]);
   const [newComment, setNewComment] = useState('');
-  const [addingComment, setAddingComment] = useState(false);
   const [activeSection, setActiveSection] = useState('details');
-  const titleRef = useRef(null);
+  const queryClient = useQueryClient();
 
-  useEffect(() => { loadComments(); }, [initialIssue.id]);
+  const { data: comments = [] } = useQuery({
+    queryKey: queryKeys.comments(projectId, initialIssue.id),
+    queryFn: () => issueService.getComments(projectId, initialIssue.id).then(r => r.data),
+  });
 
-  const loadComments = async () => {
-    try {
-      const res = await issueService.getComments(projectId, initialIssue.id);
-      setComments(res.data);
-    } catch {}
-  };
+  const patchMutation = useMutation({
+    mutationFn: (updates) => issueService.update(projectId, issue.id, updates).then(r => r.data.issue),
+    onSuccess: (updated) => {
+      const merged = { ...issue, ...updated };
+      setIssue(merged);
+      onUpdate(merged);
+    },
+  });
 
-  const patch = async (updates) => {
-    setSaving(true);
-    try {
-      const res = await issueService.update(projectId, issue.id, updates);
-      const updated = { ...issue, ...res.data.issue };
-      setIssue(updated);
-      onUpdate(updated);
-    } finally {
-      setSaving(false);
-    }
-  };
+  const addCommentMutation = useMutation({
+    mutationFn: (text) => issueService.addComment(projectId, issue.id, text),
+    onSuccess: () => {
+      setNewComment('');
+      queryClient.invalidateQueries({ queryKey: queryKeys.comments(projectId, issue.id) });
+    },
+  });
 
-  const saveText = async () => {
+  const deleteCommentMutation = useMutation({
+    mutationFn: (commentId) => issueService.deleteComment(projectId, issue.id, commentId),
+    onSuccess: (_, commentId) => {
+      queryClient.setQueryData(queryKeys.comments(projectId, issue.id),
+        old => old?.filter(c => c.id !== commentId) ?? []);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => issueService.delete(projectId, issue.id),
+    onSuccess: () => { onDelete(issue.id); onClose(); },
+  });
+
+  const patch          = useCallback((updates) => patchMutation.mutate(updates), [patchMutation.mutate]);
+  const saveText       = useCallback(() => {
     if (title.trim() === issue.title && desc === (issue.description || '')) return;
-    await patch({ title: title.trim(), description: desc });
-  };
-
-  const saveTags = async (newTags) => {
-    setTags(newTags);
-    await patch({ tags: newTags });
-  };
-
-  const handleAddComment = async (e) => {
+    patch({ title: title.trim(), description: desc });
+  }, [title, desc, issue.title, issue.description, patch]);
+  const saveTags       = useCallback((newTags) => { setTags(newTags); patch({ tags: newTags }); }, [patch]);
+  const handleAddComment = useCallback((e) => {
     e.preventDefault();
     if (!newComment.trim()) return;
-    setAddingComment(true);
-    try {
-      await issueService.addComment(projectId, issue.id, newComment.trim());
-      setNewComment('');
-      loadComments();
-    } finally {
-      setAddingComment(false);
-    }
-  };
-
-  const handleDeleteComment = async (commentId) => {
-    await issueService.deleteComment(projectId, issue.id, commentId);
-    setComments(cs => cs.filter(c => c.id !== commentId));
-  };
-
-  const handleDelete = async () => {
+    addCommentMutation.mutate(newComment.trim());
+  }, [newComment, addCommentMutation.mutate]);
+  const handleDelete   = useCallback(() => {
     if (!window.confirm('Delete this issue? This cannot be undone.')) return;
-    await issueService.delete(projectId, issue.id);
-    onDelete(issue.id);
-    onClose();
-  };
+    deleteMutation.mutate();
+  }, [deleteMutation.mutate]);
 
-  const sc = STATUS_CONFIG[issue.status]   || STATUS_CONFIG.open;
+  const sc = STATUS_CONFIG[issue.status]    || STATUS_CONFIG.open;
   const pc = PRIORITY_CONFIG[issue.priority] || PRIORITY_CONFIG.medium;
 
   return (
@@ -119,10 +113,10 @@ export default function IssueDrawer({ issue: initialIssue, projectId, onClose, o
           <div className="drawer-header-left">
             <span className="drawer-issue-type">{TYPE_CONFIG[issue.type]?.icon || '🐛'}</span>
             <span className="drawer-issue-id">#{issue.id.slice(0, 8).toUpperCase()}</span>
-            {saving && <span className="drawer-saving">Saving…</span>}
+            {patchMutation.isPending && <span className="drawer-saving">Saving…</span>}
           </div>
           <div className="drawer-header-actions">
-            <button className="drawer-delete-btn" onClick={handleDelete} title="Delete issue">
+            <button className="drawer-delete-btn" onClick={handleDelete} title="Delete issue" disabled={deleteMutation.isPending}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/>
                 <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
@@ -139,7 +133,6 @@ export default function IssueDrawer({ issue: initialIssue, projectId, onClose, o
         {/* Title */}
         <div className="drawer-title-wrap">
           <textarea
-            ref={titleRef}
             className="drawer-title-input"
             value={title}
             onChange={e => setTitle(e.target.value)}
@@ -238,7 +231,7 @@ export default function IssueDrawer({ issue: initialIssue, projectId, onClose, o
 
                 <div className="drawer-meta-row">
                   <span className="drawer-meta-label">Created</span>
-                  <span className="drawer-meta-text">{formatDate(issue.created_at)} {formatTime(issue.created_at)}</span>
+                  <span className="drawer-meta-text">{formatDateTime(issue.created_at)}</span>
                 </div>
 
                 <div className="drawer-meta-row">
@@ -276,8 +269,8 @@ export default function IssueDrawer({ issue: initialIssue, projectId, onClose, o
                   placeholder="Write a comment…"
                   rows={3}
                 />
-                <button type="submit" className="drawer-comment-submit" disabled={addingComment || !newComment.trim()}>
-                  {addingComment ? 'Posting…' : 'Post Comment'}
+                <button type="submit" className="drawer-comment-submit" disabled={addCommentMutation.isPending || !newComment.trim()}>
+                  {addCommentMutation.isPending ? 'Posting…' : 'Post Comment'}
                 </button>
               </form>
 
@@ -291,8 +284,8 @@ export default function IssueDrawer({ issue: initialIssue, projectId, onClose, o
                       <div className="drawer-comment-body">
                         <div className="drawer-comment-meta">
                           <span className="drawer-comment-author">{c.name}</span>
-                          <span className="drawer-comment-time">{formatDate(c.created_at)} at {formatTime(c.created_at)}</span>
-                          <button className="drawer-comment-delete" onClick={() => handleDeleteComment(c.id)}>Delete</button>
+                          <span className="drawer-comment-time">{formatDateTime(c.created_at)}</span>
+                          <button className="drawer-comment-delete" onClick={() => deleteCommentMutation.mutate(c.id)}>Delete</button>
                         </div>
                         <p className="drawer-comment-text">{c.text}</p>
                       </div>

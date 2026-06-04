@@ -1,209 +1,231 @@
-# Bugme MVP - Frontend
+# Bugme — Frontend
 
-A React-based frontend for the Bugme bug tracking and test management platform.
+React 18 + Vite frontend for the Bugme bug tracking platform.
 
-## Features
+---
 
-- ✅ User Authentication (Login/Signup)
-- ✅ Project Management
-- ✅ Issue/Bug Tracking
-- ✅ Test Case Management
-- ✅ Real-time State Management
-- ✅ Responsive Design
-- ✅ JWT Token-based Auth
+## Stack
 
-## Prerequisites
+| | |
+|---|---|
+| Framework | React 18 |
+| Build tool | Vite 5 |
+| Routing | React Router v6 |
+| Server state | TanStack Query v5 |
+| HTTP | Axios |
+| Styling | Custom CSS (CSS variables, no framework) |
 
-- Node.js (v14+)
-- npm or yarn
+---
 
-## Installation
-
-1. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-2. **Start development server**
-   ```bash
-   npm run dev
-   ```
-
-The application will be available at `http://localhost:3000`
-
-## Building for Production
+## Getting Started
 
 ```bash
-npm run build
+npm install
+npm run dev        # http://localhost:3000
+npm run build      # production build → dist/
+npm run preview    # preview the production build locally
 ```
 
-This creates an optimized production build in the `dist/` directory.
+The dev server proxies `/api/*` to `http://localhost:5001` (see `vite.config.js`), so the HttpOnly auth cookie works same-origin without any extra configuration.
+
+---
+
+## Environment
+
+```env
+# .env
+VITE_API_URL=/api/v1      # default — uses the Vite proxy
+# For production with a separate domain:
+# VITE_API_URL=https://api.yourapp.com/api/v1
+```
+
+---
 
 ## Project Structure
 
 ```
-frontend/
-├── src/
-│   ├── components/
-│   │   ├── Navbar.jsx
-│   │   └── ProtectedRoute.jsx
-│   ├── pages/
-│   │   ├── Home.jsx
-│   │   ├── Login.jsx
-│   │   ├── Signup.jsx
-│   │   ├── Projects.jsx
-│   │   └── ProjectDetail.jsx
-│   ├── services/
-│   │   └── api.js              # API communication
-│   ├── contexts/
-│   │   └── AuthContext.jsx      # Auth state management
-│   ├── styles/
-│   │   ├── index.css
-│   │   ├── navbar.css
-│   │   ├── auth.css
-│   │   ├── projects.css
-│   │   ├── project-detail.css
-│   │   └── home.css
-│   ├── App.jsx
-│   └── main.jsx
-├── index.html
-├── vite.config.js
-└── package.json
+src/
+├── components/
+│   ├── ui/
+│   │   ├── Avatar.jsx        # Name-initials avatar with hue-based colour
+│   │   ├── Badge.jsx         # Status / priority colour badges
+│   │   ├── Button.jsx
+│   │   ├── FormField.jsx
+│   │   └── Modal.jsx
+│   ├── Dashboard.jsx         # Analytics chart component (used in Reports tab)
+│   ├── IssueDrawer.jsx       # Slide-in panel for editing a single issue
+│   ├── ProtectedRoute.jsx    # Redirects to /login if not authenticated
+│   ├── Sidebar.jsx           # Main nav sidebar with theme toggle
+│   └── WhatNew.jsx           # Changelog modal
+│
+├── contexts/
+│   ├── AuthContext.jsx       # In-memory access token + silent refresh on mount
+│   └── ThemeContext.jsx      # Light / dark theme (persisted in cookie)
+│
+├── hooks/
+│   └── useAsync.js           # Legacy helper (kept for reference, not used)
+│
+├── lib/
+│   ├── cookieStorage.js      # Centralized cookie read/write/remove utility
+│   ├── queryKeys.js          # TanStack Query cache key factories
+│   └── storageKeys.js        # Frozen enum of storage key name strings
+│
+├── pages/
+│   ├── AcceptInvite.jsx      # Public — team invitation accept flow
+│   ├── ForgotPassword.jsx
+│   ├── Home.jsx              # Landing page
+│   ├── KnowledgeBase.jsx     # Per-project knowledge base
+│   ├── Login.jsx
+│   ├── ProjectDetail.jsx     # Issues / Test Cases / Sprints / Reports tabs
+│   ├── Projects.jsx          # Projects grid with favourites
+│   ├── ResetPassword.jsx
+│   ├── Signup.jsx
+│   ├── Teams.jsx             # Team management + member list
+│   └── UserProfile.jsx       # Profile edit + password change + subscription
+│
+├── services/
+│   └── api.js                # Axios instance, in-memory token, 401 interceptor
+│
+├── styles/                   # One CSS file per page/component
+│
+├── utils/
+│   ├── constants.jsx         # Status / priority / type / severity / platform configs
+│   └── helpers.js            # formatDate, formatTime, getInitials, avatarHue …
+│
+├── App.jsx                   # Route tree + QueryClientProvider
+└── main.jsx                  # ReactDOM.createRoot entry point
 ```
 
-## Key Pages
+---
 
-### Home (/)
-Landing page with feature overview and call-to-action buttons.
+## Auth Flow
 
-### Login (/login)
-User login with JWT token management.
-- Demo email: `demo@bugme.com`
-- Demo password: `Demo@123`
+```
+Page load
+  └─ AuthContext.useEffect
+       └─ POST /api/v1/auth/refresh  (HttpOnly cookie sent automatically)
+            ├─ 200 → setAccessToken(token) in api.js module var + setUser()
+            └─ 401 → stay logged out, show /login
 
-### Signup (/signup)
-New user registration.
+Login / Signup
+  └─ authService.login() → { accessToken, user }
+       └─ AuthContext.login(user, accessToken)
+            └─ setAccessToken() in api.js + setUser() in state
 
-### Projects (/projects)
-Dashboard showing all user projects. Users can:
-- Create new projects
-- View project details
-- Delete projects
+Every API request
+  └─ request interceptor → Authorization: Bearer <_accessToken>
 
-### Project Detail (/projects/:projectId)
-Detailed view of a project with two tabs:
-- **Issues**: Create, view, and manage bugs
-  - Set priority (Low, Medium, High, Critical)
-  - Track status (Open, In Progress, Closed)
-- **Test Cases**: Create and manage test cases
-  - Add test descriptions
-  - Set expected results
+401 response
+  └─ response interceptor
+       └─ POST /auth/refresh (separate axios instance, no interceptors)
+            ├─ 200 → update _accessToken, retry original request
+            └─ fail → dispatch 'auth:logout' event → AuthContext clears state
 
-## API Integration
-
-The frontend communicates with the backend at `http://localhost:5000/api/v1`.
-
-Key API services:
-- **Auth**: Login, Signup
-- **Projects**: CRUD operations
-- **Issues**: Create, read, update, delete bugs
-- **Test Cases**: Create, read, update, delete test cases
-
-See `src/services/api.js` for all API methods.
-
-## Authentication Flow
-
-1. User signs up/logs in
-2. Backend returns JWT token
-3. Token is stored in localStorage
-4. Token is included in all subsequent API requests
-5. Protected routes check for valid authentication
-
-## Styling
-
-- **Global styles**: `src/styles/index.css`
-- **Component-specific styles**: Individual CSS files
-- **CSS Variables**: Theme colors and spacing defined in `:root`
-
-### Color Scheme
-- Primary: `#5b5bff` (Purple)
-- Secondary: `#ff6b6b` (Red)
-- Success: `#51cf66` (Green)
-- Warning: `#ffd43b` (Yellow)
-
-## Development
-
-### Start Dev Server
-```bash
-npm run dev
+Logout
+  └─ authService.logout() → server clears HttpOnly cookie
+  └─ clearAccessToken() + setUser(null)
 ```
 
-### Proxy Configuration
-The app proxies API calls to `http://localhost:5000` during development. Configured in `vite.config.js`.
+---
 
-### Environment Variables
-Create `.env.local` if needed:
+## TanStack Query Usage
+
+All server state goes through TanStack Query. Pattern used across the app:
+
+```jsx
+// Reads
+const { data: projects = [], isLoading } = useQuery({
+  queryKey: queryKeys.projects(),
+  queryFn: () => projectService.getAll().then(r => r.data),
+});
+
+// Writes
+const deleteMutation = useMutation({
+  mutationFn: (id) => projectService.delete(id),
+  onSuccess: (_, id) => {
+    // instant UI — no extra round-trip
+    queryClient.setQueryData(queryKeys.projects(), old =>
+      old?.filter(p => p.id !== id) ?? []
+    );
+  },
+});
 ```
-VITE_API_URL=http://localhost:5000
+
+- `staleTime: 30 000 ms` — navigating back to a page uses cache
+- Optimistic updates on favourite toggle (rolls back on error)
+- `setQueryData` for deletes / status changes — no visible flicker
+- `invalidateQueries` for creates — fresh list after adding
+
+---
+
+## Cookie Storage
+
+`src/lib/cookieStorage.js` is the only place that touches `document.cookie`.
+
+```js
+import { cookieStorage, CookieOptions } from '../lib/cookieStorage';
+import { StorageKeys }                  from '../lib/storageKeys';
+
+cookieStorage.set(StorageKeys.THEME, 'dark', CookieOptions.pref);
+cookieStorage.get(StorageKeys.THEME);   // → 'dark'
+cookieStorage.remove(StorageKeys.THEME);
 ```
 
-## Common Tasks
+**Presets:**
 
-### Add a New Page
-1. Create component in `src/pages/`
-2. Add route to `App.jsx`
-3. Create corresponding styles in `src/styles/`
+| Preset | SameSite | Secure | Max-Age |
+|---|---|---|---|
+| `CookieOptions.auth` | Strict | prod only | 7 days |
+| `CookieOptions.pref` | Lax | never | 1 year |
 
-### Add a New API Service
-Update `src/services/api.js` with new service methods.
+Auth tokens are **not** stored via `cookieStorage` — the access token is a module variable in `api.js` and the refresh token is an `HttpOnly` cookie controlled entirely by the server.
 
-### Styling a New Component
-Follow the existing CSS patterns and use CSS variables for colors.
+---
 
-## Browser Support
+## Adding a New Page
 
-- Chrome (latest)
-- Firefox (latest)
-- Safari (latest)
-- Edge (latest)
+1. Create `src/pages/MyPage.jsx`
+2. Add a route in `App.jsx` (wrap with `<ProtectedRoute>` if auth is required)
+3. Add `src/styles/my-page.css` and import it in the component
+4. If the page fetches data, add a key to `src/lib/queryKeys.js`
 
-## Performance Tips
+## Adding a New API Service
 
-- Use React.memo for expensive components
-- Lazy load routes with React.lazy
-- Optimize images and assets
-- Minimize bundle size
+Add methods to the relevant service object in `src/services/api.js`:
+
+```js
+export const myService = {
+  getAll:  ()       => api.get('/my-resource'),
+  create:  (data)   => api.post('/my-resource', data),
+  delete:  (id)     => api.delete(`/my-resource/${id}`),
+};
+```
+
+---
+
+## Routes
+
+| Path | Component | Auth |
+|---|---|---|
+| `/` | Home | public |
+| `/login` | Login | public |
+| `/signup` | Signup | public |
+| `/forgot-password` | ForgotPassword | public |
+| `/reset-password` | ResetPassword | public |
+| `/invite/:token` | AcceptInvite | public |
+| `/apps` | Projects | protected |
+| `/apps/:projectId` | ProjectDetail | protected |
+| `/apps/:projectId/knowledge-base` | KnowledgeBase | protected |
+| `/teams` | Teams | protected |
+| `/account/profile` | UserProfile | protected |
+
+---
 
 ## Troubleshooting
 
-### Port 3000 already in use
-```bash
-npm run dev -- --port 3001
-```
-
-### API Connection Issues
-- Ensure backend is running on port 5000
-- Check CORS settings in backend
-- Verify network in browser DevTools
-
-### Blank Page After Login
-- Check browser console for errors
-- Verify token is stored in localStorage
-- Check if ProtectedRoute is configured correctly
-
-## Next Steps
-
-- Add file uploads for attachments
-- Implement real-time updates with Socket.io
-- Add advanced search and filtering
-- Implement notification system
-- Add analytics dashboard
-- Create mobile app
-
-## License
-
-MIT
-
-## Support
-
-For issues or questions, refer to the main repository.
+| Problem | Fix |
+|---|---|
+| Blank page after login | Open DevTools → Network; check `/auth/refresh` returns 200 |
+| API calls return 401 immediately | Backend may be down or `JWT_SECRET` mismatched |
+| Cookie not sent | Vite proxy must be running; don't call `localhost:5001` directly |
+| Theme not persisting | Check `bm_theme` cookie in DevTools → Application → Cookies |
